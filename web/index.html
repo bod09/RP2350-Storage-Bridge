@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage Bridge</title>
+  <meta name="description" content="Browse and manage USB flash drive files via RP2350 Storage Bridge">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111113">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/file-browser.css">
+  <link rel="stylesheet" href="css/upload.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script>
+    (function() { var t = localStorage.getItem('sb-theme') || 'system';
+    document.documentElement.setAttribute('data-theme', t); })();
+  </script>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>
+      Storage Bridge
+    </div>
+
+    <button id="connectBtn" class="primary">Connect</button>
+
+    <div class="drive-info" id="driveStatus">
+      <div class="drive-header">
+        <span id="driveLabel">No drive</span>
+        <span id="driveFs"></span>
+      </div>
+      <div id="driveCap">Connect a USB storage device</div>
+      <div class="capacity-bar">
+        <div class="bar-fill" id="driveBar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a data-nav="files" class="active">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+        Files
+      </a>
+      <a data-nav="settings">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg>
+        Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button id="themeBtn" title="Toggle theme">Theme</button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- Files Page -->
+    <div class="page active" data-page="files">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button id="btnNewFolder" class="secondary" disabled title="New Folder">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+          New Folder
+        </button>
+        <button id="btnUpload" class="secondary" disabled title="Upload files">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+          Upload
+        </button>
+        <button id="btnDownload" class="secondary" disabled title="Download selected">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Download
+        </button>
+        <button id="btnDelete" class="secondary" disabled title="Delete selected">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          Delete
+        </button>
+        <button id="btnRename" class="secondary" disabled title="Rename selected">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.001 1.001 0 000-1.41l-2.34-2.34a1.001 1.001 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          Rename
+        </button>
+        <div class="spacer"></div>
+        <button id="btnRefresh" class="secondary" disabled title="Refresh">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+        <button id="btnEject" class="secondary" disabled title="Eject drive">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 17h14v2H5v-2zm7-12L5.33 15h13.34L12 5z"/></svg>
+        </button>
+        <input type="search" id="fileSearch" placeholder="Search files...">
+      </div>
+
+      <!-- Breadcrumb -->
+      <div id="breadcrumb" class="breadcrumb">
+        <span class="crumb" data-path="/">/</span>
+      </div>
+
+      <!-- Column headers -->
+      <div class="file-list-header">
+        <span></span>
+        <span data-sort="name">Name</span>
+        <span data-sort="size" style="text-align:right">Size</span>
+        <span data-sort="date">Modified</span>
+      </div>
+
+      <!-- File list -->
+      <div class="file-list" id="fileList"></div>
+
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">No drive connected</div>
+
+      <!-- Drop zone overlay -->
+      <div class="drop-zone" id="dropZone">Drop files here to upload</div>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" data-page="settings">
+      <div class="settings-page">
+        <h2>Settings</h2>
+        <div class="settings-group">
+          <h3>Device</h3>
+          <div class="settings-row">
+            <span>Firmware</span>
+            <button id="btnBootloader" class="secondary" onclick="
+              if(confirm('Reboot to bootloader for firmware update?')){
+                import('./js/serial.js').then(s=>s.sendCommand({cmd:'bootloader'}));
+              }
+            ">Reboot to Bootloader</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>About</h3>
+          <p style="font-size:12px;color:var(--text-secondary);">
+            RP2350 Storage Bridge<br>
+            Browse and manage USB storage devices via Web Serial.<br>
+            Supports FAT12, FAT16, FAT32, and exFAT filesystems.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Hidden upload input -->
+<input type="file" id="uploadInput" multiple>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Dialog Modal -->
+<div class="modal" id="dialogModal">
+  <div class="modal-content">
+    <h3 id="dialogTitle">Dialog</h3>
+    <p id="dialogMessage"></p>
+    <div class="input-group" id="dialogInputGroup" hidden>
+      <input type="text" id="dialogInput">
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" id="dialogCancel">Cancel</button>
+      <button class="primary" id="dialogOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer Progress -->
+<div class="transfer-overlay" id="transferOverlay">
+  <div class="transfer-name" id="transferFileName"></div>
+  <div class="transfer-bar-bg">
+    <div class="bar-fill" id="transferBar" style="width:0%"></div>
+  </div>
+  <div class="transfer-details">
+    <span id="transferProgress"></span>
+    <span id="transferSpeed"></span>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

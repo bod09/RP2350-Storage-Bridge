@@ -1,0 +1,22 @@
+.drop-zone {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 113, 227, 0.08);
+  border: 3px dashed var(--accent);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent);
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.drop-zone.show {
+  opacity: 1;
+  pointer-events: auto;
+}

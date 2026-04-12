@@ -1,0 +1,12 @@
+{
+  "name": "RP2350 Storage Bridge",
+  "short_name": "Storage Bridge",
+  "description": "Browse and manage USB flash drive files via RP2350 Storage Bridge",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#111113",
+  "id": "rp2350-storage-bridge",
+  "prefer_related_applications": false
+}

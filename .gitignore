@@ -1,0 +1,24 @@
+# Build
+firmware/build/
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+*.uf2
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Keys (if any)
+*.pem
+*.key

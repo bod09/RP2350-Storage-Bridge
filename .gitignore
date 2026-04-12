@@ -7,6 +7,9 @@ firmware/build/
 *.dis
 *.uf2
 
+# Bundled output
+web/dist/
+
 # IDE
 .vscode/
 .idea/

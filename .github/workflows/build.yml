@@ -1,0 +1,89 @@
+name: Build Firmware & Web App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Install esbuild
+        run: npm install -g esbuild
+
+      - name: Bundle web app
+        run: python3 tools/bundle.py
+
+      - name: Configure firmware
+        run: |
+          cd firmware
+          mkdir build
+          cd build
+          cmake .. -G Ninja
+
+      - name: Build firmware
+        run: |
+          cd firmware/build
+          ninja
+
+      - name: Upload firmware UF2
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-bridge-firmware
+          path: firmware/build/storage_bridge.uf2
+
+      - name: Upload bundled web app
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-bridge-webapp
+          path: |
+            web/dist/storage-bridge.html
+            web/dist/index.html
+
+  # Deploy web app to GitHub Pages on push to main
+  deploy-pages:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

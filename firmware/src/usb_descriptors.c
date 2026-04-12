@@ -3,14 +3,57 @@
 #include "pico/unique_id.h"
 #include <string.h>
 
+// ---- WebUSB ----
+#define VENDOR_REQUEST_WEBUSB    1
+#define VENDOR_REQUEST_MICROSOFT 2
+
+// Landing page URL — Chrome shows a notification to visit this when device is plugged in.
+// Update this to your GitHub Pages URL or wherever you host the web app.
+#define WEBUSB_URL  "bod09.github.io/RP2350-Storage-Bridge"
+
+static const tusb_desc_webusb_url_t desc_url = {
+    .bLength         = 3 + sizeof(WEBUSB_URL) - 1,
+    .bDescriptorType = 3,  // WEBUSB URL type
+    .bScheme         = 1,  // 1 = https://
+    .url             = WEBUSB_URL
+};
+
+// ---- BOS Descriptor (required for WebUSB, needs bcdUSB >= 2.01) ----
+#define BOS_TOTAL_LEN  (TUD_BOS_DESC_LEN + TUD_BOS_WEBUSB_DESC_LEN)
+
+static const uint8_t desc_bos[] = {
+    TUD_BOS_DESCRIPTOR(BOS_TOTAL_LEN, 1),
+    TUD_BOS_WEBUSB_DESCRIPTOR(VENDOR_REQUEST_WEBUSB, 1),
+};
+
+uint8_t const* tud_descriptor_bos_cb(void) {
+    return desc_bos;
+}
+
+// ---- Vendor Control Request Handler (WebUSB URL retrieval) ----
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                 tusb_control_request_t const* request) {
+    if (stage != CONTROL_STAGE_SETUP) return true;
+
+    if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR) {
+        if (request->bRequest == VENDOR_REQUEST_WEBUSB &&
+            request->wIndex == 2 /* WEBUSB_REQUEST_GET_URL */) {
+            return tud_control_xfer(rhport, request,
+                                    (void*)(uintptr_t)&desc_url, desc_url.bLength);
+        }
+    }
+
+    return false;
+}
+
 // ---- Device Descriptor ----
 static const tusb_desc_device_t desc_device = {
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
-    .bcdUSB             = 0x0200,
+    .bcdUSB             = 0x0210,  // USB 2.1 — required for BOS/WebUSB
     .bDeviceClass       = TUSB_CLASS_MISC,
     .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
-    .bDeviceProtocol    = MISC_PROTOCOL_IAD,  // Required for CDC composite
+    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
     .idVendor           = 0xCAFE,
     .idProduct          = 0x4002,
@@ -36,7 +79,6 @@ uint8_t const* tud_hid_descriptor_report_cb(uint8_t instance) {
 }
 
 // ---- Configuration Descriptor ----
-// CDC (2 interfaces) + HID keyboard = 3 interfaces
 #define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_HID_DESC_LEN)
 
 #define EPNUM_CDC_NOTIF  0x81
@@ -67,7 +109,7 @@ static char serial_str[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
 static const char* string_desc_arr[] = {
     NULL,                        // 0: language
     "USB",                       // 1: Manufacturer
-    "USB Keyboard",              // 2: Product (generic so it's recognized)
+    "USB Keyboard",              // 2: Product
     serial_str,                  // 3: Serial
     "Storage Bridge Serial",     // 4: CDC interface
     "USB Keyboard",              // 5: HID keyboard
@@ -80,10 +122,9 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     uint8_t chr_count;
 
     if (index == 0) {
-        _desc_str[1] = 0x0409;  // English
+        _desc_str[1] = 0x0409;
         chr_count = 1;
     } else {
-        // Generate serial string on first access
         if (index == 3 && serial_str[0] == 0) {
             pico_unique_board_id_t id;
             pico_get_unique_board_id(&id);

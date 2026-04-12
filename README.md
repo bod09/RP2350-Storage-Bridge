@@ -8,11 +8,19 @@ Plug the RP2350-USB-A into a computer — it appears as a generic USB keyboard (
 
 **Supported filesystems:** FAT12, FAT16, FAT32, exFAT
 
+## How to Access the Web App
+
+Three options — all use the same Web Serial protocol:
+
+1. **Auto-prompt (Chrome):** Plug in the device, Chrome shows a WebUSB notification linking to the hosted web app. Click it.
+2. **Hosted:** Visit the [GitHub Pages site](https://bod09.github.io/RP2350-Storage-Bridge) — works with PWA offline caching after first load.
+3. **Air-gapped / restricted:** Download `storage-bridge.html` from [Releases](../../releases) and open it locally in Chrome. Works from `file://` with no internet.
+
 ## Hardware
 
 - **Board:** [Waveshare RP2350-USB-A](https://www.waveshare.com/rp2350-usb-a.htm)
 - **Chip:** RP2350 (dual-core Cortex-M33), 520KB SRAM, 2MB flash
-- **Native USB (Port 0):** Device mode to PC — composite HID keyboard + CDC serial
+- **Native USB (Port 0):** Device mode to PC — composite HID keyboard + CDC serial + WebUSB
 - **PIO USB (Port 1, GPIO 12/13):** Host mode — accepts USB mass storage devices
 
 **Note:** Desolder R13 (1.5k pull-up on D+) for reliable USB host operation.
@@ -32,6 +40,9 @@ Plug the RP2350-USB-A into a computer — it appears as a generic USB keyboard (
 ## Building Firmware
 
 ```bash
+# First time: init submodules
+git submodule update --init --recursive
+
 cd firmware
 mkdir build && cd build
 cmake ..
@@ -39,16 +50,13 @@ make -j$(nproc)
 # Flash storage_bridge.uf2 to device
 ```
 
-**Requirements:** ARM GCC toolchain, CMake 3.13+, Pico SDK (included as submodule)
+Pre-built UF2 files are also available from [GitHub Actions](../../actions) artifacts.
 
-```bash
-# First time: init submodules
-git submodule update --init --recursive
-```
+**Requirements:** ARM GCC toolchain, CMake 3.13+
 
 ## Web App
 
-The web app is static HTML/JS/CSS — no build step required. Serve from any web server or open `web/index.html` directly.
+### Development (multi-file, ES modules)
 
 ```bash
 cd web
@@ -56,7 +64,22 @@ python3 -m http.server 8080
 # Open http://localhost:8080 in Chrome/Edge
 ```
 
+### Bundled single-file (for releases / offline use)
+
+```bash
+# Requires esbuild: npm i -g esbuild
+python3 tools/bundle.py
+# Output: web/dist/storage-bridge.html (~37 KB)
+```
+
 **Browser requirement:** Chrome or Edge (Web Serial API support)
+
+## CI/CD
+
+GitHub Actions automatically:
+- Builds firmware and uploads `.uf2` artifact
+- Bundles web app and uploads single-file HTML artifact
+- Deploys web app to GitHub Pages on push to `main`
 
 ## Serial Protocol
 

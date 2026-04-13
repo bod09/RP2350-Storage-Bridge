@@ -27,9 +27,6 @@ if (COMMAND check_and_add_pico_pio_usb_support)
     check_and_add_pico_pio_usb_support()
 endif()
 
-# FatFS source from TinyUSB bundled copy
-set(FATFS_SRC_DIR ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source)
-
 add_executable(storage_bridge
     src/main.c
     src/usb_descriptors.c
@@ -38,9 +35,10 @@ add_executable(storage_bridge
     src/msc_diskio.c
     src/file_ops.c
     src/base64.c
-    # FatFS core
-    ${FATFS_SRC_DIR}/ff.c
-    ${FATFS_SRC_DIR}/ffunicode.c
+    # FatFS core — compiled via wrappers in src/ so that GCC's quoted-include
+    # search finds our ffconf.h (in src/) before the bundled default.
+    src/fatfs_ff.c
+    src/fatfs_ffunicode.c
 )
 
 # Include paths:

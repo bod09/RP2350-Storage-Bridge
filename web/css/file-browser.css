@@ -196,6 +196,17 @@
 .viewer-toolbar button svg { width: 14px; height: 14px; }
 .viewer-toolbar .spacer { flex: 1; }
 
+.viewer-zoom-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.viewer-zoom-label[hidden] { display: none; }
+
 .viewer-filename {
   font-size: 13px;
   font-weight: 600;

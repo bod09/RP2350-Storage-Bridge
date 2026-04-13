@@ -313,6 +313,8 @@ function applyZoom(level) {
   if (!img) return;
   img.style.transform = `scale(${zoomLevel})`;
   img.style.transformOrigin = 'center center';
+  const label = $('#viewerZoomLevel');
+  if (label) label.textContent = Math.round(zoomLevel * 100) + '%';
 }
 
 function toggleFullscreen() {
@@ -339,7 +341,9 @@ function updateToolbarButtons(category, editing) {
 
   const isImage = category === 'image';
   const isMedia = ['image', 'video', 'audio', 'pdf'].includes(category);
+  const zoomLabel = $('#viewerZoomLevel');
   if (zoomInBtn) zoomInBtn.hidden = !isImage;
+  if (zoomLabel) { zoomLabel.hidden = !isImage; zoomLabel.textContent = '100%'; }
   if (zoomOutBtn) zoomOutBtn.hidden = !isImage;
   if (fullscreenBtn) fullscreenBtn.hidden = !isMedia;
 }

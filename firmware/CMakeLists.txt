@@ -44,19 +44,12 @@ add_executable(storage_bridge
 )
 
 # Include paths:
-# - src/ for tusb_config.h, board.h, ffconf.h (overrides FatFS default)
-# - FatFS source dir for ff.h, diskio.h
+# - src/ contains tusb_config.h, board.h, ffconf.h, ff.h, diskio.h
+# ff.h and diskio.h are copied from FatFS source; ffconf.h is our custom config.
+# We do NOT add the FatFS source dir to include paths — that would let the
+# bundled ffconf.h override our settings via GCC's "same directory" search rule.
 target_include_directories(storage_bridge PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
-    ${FATFS_SRC_DIR}
-)
-
-# Force FatFS to use our ffconf.h instead of its bundled default.
-# GCC's #include "..." searches the source file's directory first, which finds
-# the bundled ffconf.h before our -I path. -include injects our config before
-# any #include in the FatFS sources.
-target_compile_options(storage_bridge PRIVATE
-    -include ${CMAKE_CURRENT_LIST_DIR}/src/ffconf.h
 )
 
 target_compile_definitions(storage_bridge PRIVATE

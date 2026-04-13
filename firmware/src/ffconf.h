@@ -2,7 +2,9 @@
 #define FFCONF_H
 
 // FatFS configuration for RP2350 Storage Bridge
-// Overrides the default ffconf.h shipped with FatFS
+// Custom config — replaces the default ffconf.h shipped with FatFS
+
+#define FFCONF_DEF  80286  // Must match FF_DEFINED in ff.h
 
 #define FF_FS_READONLY    0     // Read-write
 #define FF_FS_MINIMIZE    0     // Full API

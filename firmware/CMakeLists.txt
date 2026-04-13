@@ -51,6 +51,14 @@ target_include_directories(storage_bridge PRIVATE
     ${FATFS_SRC_DIR}
 )
 
+# Force FatFS to use our ffconf.h instead of its bundled default.
+# GCC's #include "..." searches the source file's directory first, which finds
+# the bundled ffconf.h before our -I path. -include injects our config before
+# any #include in the FatFS sources.
+target_compile_options(storage_bridge PRIVATE
+    -include ${CMAKE_CURRENT_LIST_DIR}/src/ffconf.h
+)
+
 target_compile_definitions(storage_bridge PRIVATE
     PICO_DEFAULT_UART_BAUD_RATE=921600
 )

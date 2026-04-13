@@ -46,6 +46,13 @@ function handleMessage(msg) {
 
   // Drive status (unsolicited or in response to status command)
   if (data.type === 'drive') {
+    // Resolve pending first (before dispatching events that may issue new commands)
+    if (pendingResolve) {
+      const r = pendingResolve;
+      pendingResolve = null;
+      clearTimeout(pendingTimeout);
+      r(data);
+    }
     if (data.mounted) {
       state.batch({
         driveMounted: true,
@@ -69,13 +76,6 @@ function handleMessage(msg) {
         showToast(data.error, 'error');
       }
       document.dispatchEvent(new CustomEvent('drive-unmounted'));
-    }
-    // Also resolve pending if this was from a status command
-    if (pendingResolve) {
-      const r = pendingResolve;
-      pendingResolve = null;
-      clearTimeout(pendingTimeout);
-      r(data);
     }
     return;
   }

@@ -5,6 +5,7 @@
 #include "ff.h"
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 // Shared work buffer for file I/O and base64 encoding.
 // 8KB raw data + base64 overhead + JSON framing fits within serial_buf limits.

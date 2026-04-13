@@ -14,7 +14,9 @@
 #define BOARD_HAS_WS2812            1
 
 // --- PIO USB Host ---
+#ifndef PICO_DEFAULT_PIO_USB_DP_PIN
 #define PICO_DEFAULT_PIO_USB_DP_PIN 12   // PIO USB D+ (D- is implicitly GPIO 13)
+#endif
 #define BOARD_TUH_RHPORT            1    // Host port number (PIO USB = port 1)
 
 #endif // BOARD_WAVESHARE_RP2350A_H

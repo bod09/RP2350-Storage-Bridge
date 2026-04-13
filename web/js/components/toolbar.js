@@ -4,7 +4,6 @@ import { $ } from '../utils/dom.js';
 import { showToast } from './toast.js';
 import { confirm, prompt } from './dialog.js';
 import { navigateTo } from './file-browser.js';
-import { openFile } from './file-viewer.js';
 import { getSuspiciousFiles } from '../utils/security.js';
 
 let uploadInput;
@@ -25,10 +24,6 @@ export function initToolbar() {
 
   document.addEventListener('download-file', (e) => {
     downloadFile(e.detail);
-  });
-
-  document.addEventListener('open-file', (e) => {
-    openFile(e.detail.name, e.detail.entry);
   });
 
   // Update button states

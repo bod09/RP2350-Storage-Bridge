@@ -1,10 +1,16 @@
-name: Build Firmware & Web App
+name: Build Firmware
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
 
 jobs:
   build:
@@ -26,20 +32,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build
 
-      - name: Install esbuild
-        run: npm install -g esbuild
-
-      - name: Bundle web app
-        run: python3 tools/bundle.py
-
-      - name: Configure firmware
+      - name: Configure
         run: |
           cd firmware
           mkdir build
           cd build
           cmake .. -G Ninja
 
-      - name: Build firmware
+      - name: Build
         run: |
           cd firmware/build
           ninja
@@ -51,39 +51,14 @@ jobs:
           path: firmware/build/storage_bridge.uf2
 
       - name: Upload bundled web app
+        run: |
+          npm install -g esbuild
+          python3 tools/bundle.py
+
+      - name: Upload web app artifact
         uses: actions/upload-artifact@v4
         with:
           name: storage-bridge-webapp
           path: |
             web/dist/storage-bridge.html
             web/dist/index.html
-
-  # Deploy web app to GitHub Pages on push to main
-  deploy-pages:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    permissions:
-      pages: write
-      id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: web/
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

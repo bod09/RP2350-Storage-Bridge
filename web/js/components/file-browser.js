@@ -2,6 +2,7 @@ import * as state from '../state.js';
 import * as serial from '../serial.js';
 import { $, $$ } from '../utils/dom.js';
 import { formatFileSize, formatDate } from '../utils/format.js';
+import { isSuspiciousFile, getSeverity } from '../utils/security.js';
 
 let fileList, breadcrumb, emptyState, searchInput;
 
@@ -104,11 +105,14 @@ export function initFileBrowser() {
     state.set('selectedFiles', selected);
   });
 
-  // Double-click to download
+  // Double-click to open/preview file
   fileList?.addEventListener('dblclick', (e) => {
     const row = e.target.closest('.file-row');
     if (!row || row.dataset.type === 'd') return;
-    document.dispatchEvent(new CustomEvent('download-file', { detail: row.dataset.name }));
+    const name = row.dataset.name;
+    const entries = state.get('entries') || [];
+    const entry = entries.find(en => en.name === name);
+    document.dispatchEvent(new CustomEvent('open-file', { detail: { name, entry } }));
   });
 
   renderEmpty();
@@ -120,6 +124,27 @@ export async function navigateTo(path) {
   state.set('loading', false);
   if (!entries) return;
   renderBreadcrumb(path);
+  resolveFolderSizes(path, entries);
+}
+
+async function resolveFolderSizes(path, entries) {
+  const dirs = entries.filter(e => e.type === 'd');
+  for (const dir of dirs) {
+    // Check user hasn't navigated away
+    if (state.get('currentPath') !== path) return;
+    const dirPath = path === '/' ? '/' + dir.name : path + '/' + dir.name;
+    const result = await serial.getDirSize(dirPath);
+    if (!result) continue;
+    // Check again after async
+    if (state.get('currentPath') !== path) return;
+    const current = state.get('entries') || [];
+    const updated = current.map(e =>
+      e.name === dir.name && e.type === 'd'
+        ? { ...e, size: result.size, sizeResolved: true }
+        : e
+    );
+    state.set('entries', updated);
+  }
 }
 
 function getSortedFiltered() {
@@ -170,12 +195,21 @@ function renderFileList() {
   fileList.innerHTML = entries.map(entry => {
     const icon = getIcon(entry);
     const sel = selected.includes(entry.name) ? ' selected' : '';
-    const size = entry.type === 'd' ? '--' : formatFileSize(entry.size || 0);
+    let size;
+    if (entry.type === 'd') {
+      size = entry.sizeResolved ? formatFileSize(entry.size || 0)
+        : '<span class="size-loading">...</span>';
+    } else {
+      size = formatFileSize(entry.size || 0);
+    }
     const date = formatDate(entry.modified);
+    const warn = (entry.type !== 'd' && isSuspiciousFile(entry.name))
+      ? `<span class="security-warn severity-${getSeverity(entry.name)}" title="Potentially suspicious file">&#9888;</span>`
+      : '';
 
     return `<div class="file-row${sel}" data-name="${escHtml(entry.name)}" data-type="${entry.type}">
       <div class="file-icon">${icon}</div>
-      <div class="file-name">${escHtml(entry.name)}</div>
+      <div class="file-name">${warn}${escHtml(entry.name)}</div>
       <div class="file-size">${size}</div>
       <div class="file-date">${date}</div>
     </div>`;

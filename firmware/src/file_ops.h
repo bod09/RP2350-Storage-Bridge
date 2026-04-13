@@ -16,5 +16,6 @@ void file_op_read(const char* path, uint32_t offset, uint32_t length);
 void file_op_write(const char* path, uint32_t offset,
                    const uint8_t* data, uint32_t data_len, bool done);
 void file_op_df(void);
+void file_op_dirsize(const char* path);
 
 #endif // FILE_OPS_H

@@ -199,6 +199,12 @@ static void process_command(const char* cmd) {
 
         file_op_write(path, (uint32_t)offset, write_buf, (uint32_t)decoded_len, done);
     }
+    else if (strstr(cmd, "\"cmd\":\"dirsize\"")) {
+        if (!info->mounted) { cdc_send("{\"status\":\"error\",\"msg\":\"No drive\"}\n"); return; }
+        path[0] = '/'; path[1] = '\0';
+        json_get_string(cmd, "path", path, sizeof(path));
+        file_op_dirsize(path);
+    }
     else if (strstr(cmd, "\"cmd\":\"df\"")) {
         file_op_df();
     }

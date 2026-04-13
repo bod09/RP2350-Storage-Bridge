@@ -28,6 +28,7 @@ const state = {
 
   // UI
   loading: false,
+  viewerOpen: false,
 };
 
 export function get(key) {
@@ -75,4 +76,5 @@ export function resetState() {
   set('selectedFiles', []);
   set('activeTransfer', null);
   set('loading', false);
+  set('viewerOpen', false);
 }

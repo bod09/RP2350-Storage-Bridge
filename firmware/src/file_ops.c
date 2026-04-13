@@ -3,6 +3,8 @@
 #include "base64.h"
 #include "msc_host.h"
 #include "ff.h"
+#include "tusb.h"
+#include "hardware/watchdog.h"
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -216,5 +218,83 @@ void file_op_df(void) {
                        "\"total\":%" PRIu64 ",\"free\":%" PRIu64 "}\n",
                        info->label, info->fs_type,
                        info->total_bytes, info->free_bytes);
+    cdc_write_chunked(buf, len);
+}
+
+#define DIRSIZE_MAX_DEPTH 8
+
+void file_op_dirsize(const char* path) {
+    DIR dir_stack[DIRSIZE_MAX_DEPTH];
+    int depth = 0;
+    FILINFO fno;
+    char pathbuf[256];
+    uint64_t total_size = 0;
+    uint32_t file_count = 0;
+    uint32_t dir_count = 0;
+    uint32_t tick = 0;
+
+    strncpy(pathbuf, path, sizeof(pathbuf) - 1);
+    pathbuf[sizeof(pathbuf) - 1] = '\0';
+
+    FRESULT res = f_opendir(&dir_stack[0], pathbuf);
+    if (res != FR_OK) { send_error(res); return; }
+
+    while (depth >= 0) {
+        res = f_readdir(&dir_stack[depth], &fno);
+        if (res != FR_OK || fno.fname[0] == '\0') {
+            // End of this directory — pop
+            f_closedir(&dir_stack[depth]);
+            // Remove last path component
+            if (depth > 0) {
+                char* slash = strrchr(pathbuf, '/');
+                if (slash && slash != pathbuf) *slash = '\0';
+                else if (slash == pathbuf) pathbuf[1] = '\0';
+            }
+            depth--;
+            continue;
+        }
+
+        if (fno.fname[0] == '.') continue;
+
+        // Keep USB alive during long traversals
+        if (++tick % 50 == 0) {
+            watchdog_update();
+            tud_task();
+            tuh_task();
+        }
+
+        if (fno.fattrib & AM_DIR) {
+            dir_count++;
+            if (depth + 1 < DIRSIZE_MAX_DEPTH) {
+                // Build child path
+                size_t plen = strlen(pathbuf);
+                bool needs_slash = (plen > 0 && pathbuf[plen - 1] != '/');
+                int written = snprintf(pathbuf + plen, sizeof(pathbuf) - plen,
+                                       "%s%s", needs_slash ? "/" : "", fno.fname);
+                if (plen + written >= sizeof(pathbuf)) {
+                    // Path too long, skip this subdirectory
+                    continue;
+                }
+
+                depth++;
+                res = f_opendir(&dir_stack[depth], pathbuf);
+                if (res != FR_OK) {
+                    // Can't open — undo path extension and pop
+                    pathbuf[plen] = '\0';
+                    depth--;
+                }
+            }
+            // else: too deep, skip
+        } else {
+            total_size += (uint64_t)fno.fsize;
+            file_count++;
+        }
+    }
+
+    char buf[256];
+    int len = snprintf(buf, sizeof(buf),
+                       "{\"type\":\"dirsize\",\"path\":\"%s\",\"size\":%" PRIu64
+                       ",\"files\":%" PRIu32 ",\"dirs\":%" PRIu32 "}\n",
+                       path, total_size, file_count, dir_count);
     cdc_write_chunked(buf, len);
 }

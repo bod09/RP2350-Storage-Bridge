@@ -4,6 +4,8 @@ import { $ } from '../utils/dom.js';
 import { showToast } from './toast.js';
 import { confirm, prompt } from './dialog.js';
 import { navigateTo } from './file-browser.js';
+import { openFile } from './file-viewer.js';
+import { getSuspiciousFiles } from '../utils/security.js';
 
 let uploadInput;
 
@@ -17,11 +19,16 @@ export function initToolbar() {
   $('#btnRename')?.addEventListener('click', handleRename);
   $('#btnEject')?.addEventListener('click', handleEject);
   $('#btnRefresh')?.addEventListener('click', handleRefresh);
+  $('#btnScan')?.addEventListener('click', handleScan);
 
   uploadInput?.addEventListener('change', handleUploadFiles);
 
   document.addEventListener('download-file', (e) => {
     downloadFile(e.detail);
+  });
+
+  document.addEventListener('open-file', (e) => {
+    openFile(e.detail.name, e.detail.entry);
   });
 
   // Update button states
@@ -47,6 +54,7 @@ function updateButtons() {
   toggle('btnRename', mounted && selected.length === 1);
   toggle('btnEject', mounted);
   toggle('btnRefresh', mounted);
+  toggle('btnScan', mounted);
 }
 
 async function handleNewFolder() {
@@ -166,4 +174,16 @@ async function handleEject() {
 
 async function handleRefresh() {
   navigateTo(state.get('currentPath'));
+}
+
+async function handleScan() {
+  const entries = state.get('entries') || [];
+  const suspicious = getSuspiciousFiles(entries);
+  if (suspicious.length === 0) {
+    await confirm('Security Scan', 'No suspicious files found in current directory.');
+  } else {
+    const list = suspicious.map(s => `\u2022 ${s.name}: ${s.reason}`).join('\n');
+    await confirm('Security Scan',
+      `Found ${suspicious.length} suspicious file(s):\n\n${list}`);
+  }
 }

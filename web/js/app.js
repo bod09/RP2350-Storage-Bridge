@@ -2,6 +2,7 @@ import { initRouter } from './router.js';
 import { initSidebar, initTheme } from './components/sidebar.js';
 import { initFileBrowser } from './components/file-browser.js';
 import { initToolbar } from './components/toolbar.js';
+import { initFileViewer } from './components/file-viewer.js';
 import { initUpload } from './components/upload.js';
 import { initTransferProgress } from './components/transfer-progress.js';
 import { initToast } from './components/toast.js';
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSidebar();
   initFileBrowser();
   initToolbar();
+  initFileViewer();
   initUpload();
   initTransferProgress();
 

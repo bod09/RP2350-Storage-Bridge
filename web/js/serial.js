@@ -166,6 +166,14 @@ export async function disconnect() {
 
 // ---- File Transfer Operations ----
 
+export async function getDirSize(path) {
+  const resp = await sendCommand({ cmd: 'dirsize', path });
+  if (resp?.type === 'dirsize') {
+    return { size: resp.size, files: resp.files, dirs: resp.dirs };
+  }
+  return null;
+}
+
 export async function listDirectory(path) {
   const resp = await sendCommand({ cmd: 'ls', path });
   if (resp?.type === 'ls') {

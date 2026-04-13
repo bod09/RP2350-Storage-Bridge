@@ -3,7 +3,7 @@ import * as serial from '../serial.js';
 import { $ } from '../utils/dom.js';
 import { formatFileSize } from '../utils/format.js';
 
-let connectBtn, driveStatus, driveLabel, driveCap, driveBar, driveFs;
+let connectBtn, driveStatus, driveLabel, driveCap, driveBar, driveFs, securityBanner;
 
 export function initSidebar() {
   connectBtn = $('#connectBtn');
@@ -12,6 +12,7 @@ export function initSidebar() {
   driveCap = $('#driveCap');
   driveBar = $('#driveBar');
   driveFs = $('#driveFs');
+  securityBanner = $('#securityBanner');
 
   connectBtn.addEventListener('click', async () => {
     if (state.get('connected')) {
@@ -52,11 +53,13 @@ function updateDriveStatus() {
     driveCap.textContent = `${formatFileSize(free)} free of ${formatFileSize(total)}`;
     driveBar.style.width = pct.toFixed(1) + '%';
     driveBar.className = 'bar-fill' + (pct > 90 ? ' critical' : pct > 75 ? ' warn' : '');
+    if (securityBanner) securityBanner.hidden = false;
   } else {
     driveLabel.textContent = 'No drive';
     driveFs.textContent = '';
     driveCap.textContent = 'Connect a USB storage device';
     driveBar.style.width = '0%';
+    if (securityBanner) securityBanner.hidden = true;
   }
 }
 

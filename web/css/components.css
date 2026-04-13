@@ -164,5 +164,51 @@
 
 .settings-row:last-child { border-bottom: none; }
 
+/* Security warning icon in file list */
+.security-warn {
+  margin-right: 4px;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.security-warn.severity-high { color: var(--error); }
+.security-warn.severity-medium { color: var(--warning); }
+.security-warn.severity-low { color: var(--text-tertiary); }
+
+/* Security alert banner in file viewer */
+.security-alert {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+/* Security banner in sidebar */
+.security-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.security-banner[hidden] { display: none; }
+
+.security-banner svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 /* Hidden file input */
 #uploadInput { display: none; }

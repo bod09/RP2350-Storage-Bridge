@@ -4,6 +4,10 @@ import { $ } from '../utils/dom.js';
 import { showToast } from './toast.js';
 import { navigateTo } from './file-browser.js';
 
+function isViewerOpen() {
+  return state.get('viewerOpen');
+}
+
 let dropZone;
 
 export function initUpload() {
@@ -14,7 +18,7 @@ export function initUpload() {
 
   mainContent.addEventListener('dragenter', (e) => {
     e.preventDefault();
-    if (!state.get('driveMounted')) return;
+    if (!state.get('driveMounted') || isViewerOpen()) return;
     dragCounter++;
     if (dropZone) dropZone.classList.add('show');
   });
@@ -30,6 +34,7 @@ export function initUpload() {
 
   mainContent.addEventListener('dragover', (e) => {
     e.preventDefault();
+    if (isViewerOpen()) return;
     e.dataTransfer.dropEffect = 'copy';
   });
 
@@ -38,7 +43,7 @@ export function initUpload() {
     dragCounter = 0;
     if (dropZone) dropZone.classList.remove('show');
 
-    if (!state.get('driveMounted')) {
+    if (!state.get('driveMounted') || isViewerOpen()) {
       showToast('No drive connected', 'error');
       return;
     }

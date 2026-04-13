@@ -23,8 +23,10 @@ const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
 let viewerEl, contentEl, toolbarEl;
 let currentBlobUrl = null;
 let currentFileName = null;
+let currentCategory = null;
 let isDirty = false;
 let isEditing = false;
+let zoomLevel = 1;
 
 function getExt(name) {
   const dot = name.lastIndexOf('.');
@@ -64,6 +66,18 @@ export function initFileViewer() {
   $('#viewerEdit')?.addEventListener('click', startEditing);
   $('#viewerSave')?.addEventListener('click', saveFile);
   $('#viewerCancel')?.addEventListener('click', cancelEditing);
+  $('#viewerZoomIn')?.addEventListener('click', () => applyZoom(zoomLevel * 1.5));
+  $('#viewerZoomOut')?.addEventListener('click', () => applyZoom(zoomLevel / 1.5));
+  $('#viewerFullscreen')?.addEventListener('click', toggleFullscreen);
+
+  // Scroll-wheel zoom on images
+  viewerEl?.addEventListener('wheel', (e) => {
+    if (currentCategory !== 'image') return;
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.8 : 1.25;
+    applyZoom(zoomLevel * delta);
+  }, { passive: false });
 
   document.addEventListener('open-file', (e) => {
     openFile(e.detail.name, e.detail.entry);
@@ -82,14 +96,15 @@ export async function openFile(name, entry) {
   currentFileName = name;
   isDirty = false;
   isEditing = false;
+  zoomLevel = 1;
   cleanup();
   showViewer(true);
 
   const nameEl = $('#viewerFileName');
   if (nameEl) nameEl.textContent = name;
 
-  const category = getFileCategory(name);
-  updateToolbarButtons(category, false);
+  currentCategory = getFileCategory(name);
+  updateToolbarButtons(currentCategory, false);
 
   contentEl.innerHTML = '<div class="viewer-loading">Loading...</div>';
 
@@ -98,7 +113,7 @@ export async function openFile(name, entry) {
 
   try {
     const data = await serial.readFile(fullPath, size);
-    renderContent(name, category, data);
+    renderContent(name, currentCategory, data);
   } catch (e) {
     contentEl.innerHTML = `<div class="viewer-error">Failed to load file: ${escHtml(e.message)}</div>`;
   }
@@ -251,8 +266,10 @@ async function closeViewer() {
   showViewer(false);
   state.set('viewerOpen', false);
   currentFileName = null;
+  currentCategory = null;
   isDirty = false;
   isEditing = false;
+  zoomLevel = 1;
 }
 
 function handleDownload() {
@@ -290,14 +307,41 @@ function cleanup() {
   if (contentEl) contentEl.innerHTML = '';
 }
 
+function applyZoom(level) {
+  zoomLevel = Math.max(0.1, Math.min(level, 10));
+  const img = contentEl?.querySelector('img.viewer-media');
+  if (!img) return;
+  img.style.transform = `scale(${zoomLevel})`;
+  img.style.transformOrigin = 'center center';
+}
+
+function toggleFullscreen() {
+  const media = contentEl?.querySelector('.viewer-media, .viewer-pdf');
+  if (!media) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    media.requestFullscreen().catch(() => {});
+  }
+}
+
 function updateToolbarButtons(category, editing) {
   const editBtn = $('#viewerEdit');
   const saveBtn = $('#viewerSave');
   const cancelBtn = $('#viewerCancel');
+  const zoomInBtn = $('#viewerZoomIn');
+  const zoomOutBtn = $('#viewerZoomOut');
+  const fullscreenBtn = $('#viewerFullscreen');
 
   if (editBtn) editBtn.hidden = category !== 'text' || editing;
   if (saveBtn) saveBtn.hidden = !editing;
   if (cancelBtn) cancelBtn.hidden = !editing;
+
+  const isImage = category === 'image';
+  const isMedia = ['image', 'video', 'audio', 'pdf'].includes(category);
+  if (zoomInBtn) zoomInBtn.hidden = !isImage;
+  if (zoomOutBtn) zoomOutBtn.hidden = !isImage;
+  if (fullscreenBtn) fullscreenBtn.hidden = !isMedia;
 }
 
 function escHtml(s) {

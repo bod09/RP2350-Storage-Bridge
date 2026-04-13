@@ -3,54 +3,11 @@
 #include "pico/unique_id.h"
 #include <string.h>
 
-// ---- WebUSB ----
-#define VENDOR_REQUEST_WEBUSB    1
-#define VENDOR_REQUEST_MICROSOFT 2
-
-// Landing page URL — Chrome shows a notification to visit this when device is plugged in.
-// Update this to your GitHub Pages URL or wherever you host the web app.
-#define WEBUSB_URL  "bod09.github.io/RP2350-Storage-Bridge"
-
-static const tusb_desc_webusb_url_t desc_url = {
-    .bLength         = 3 + sizeof(WEBUSB_URL) - 1,
-    .bDescriptorType = 3,  // WEBUSB URL type
-    .bScheme         = 1,  // 1 = https://
-    .url             = WEBUSB_URL
-};
-
-// ---- BOS Descriptor (required for WebUSB, needs bcdUSB >= 2.01) ----
-#define BOS_TOTAL_LEN  (TUD_BOS_DESC_LEN + TUD_BOS_WEBUSB_DESC_LEN)
-
-static const uint8_t desc_bos[] = {
-    TUD_BOS_DESCRIPTOR(BOS_TOTAL_LEN, 1),
-    TUD_BOS_WEBUSB_DESCRIPTOR(VENDOR_REQUEST_WEBUSB, 1),
-};
-
-uint8_t const* tud_descriptor_bos_cb(void) {
-    return desc_bos;
-}
-
-// ---- Vendor Control Request Handler (WebUSB URL retrieval) ----
-bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
-                                 tusb_control_request_t const* request) {
-    if (stage != CONTROL_STAGE_SETUP) return true;
-
-    if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR) {
-        if (request->bRequest == VENDOR_REQUEST_WEBUSB &&
-            request->wIndex == 2 /* WEBUSB_REQUEST_GET_URL */) {
-            return tud_control_xfer(rhport, request,
-                                    (void*)(uintptr_t)&desc_url, desc_url.bLength);
-        }
-    }
-
-    return false;
-}
-
 // ---- Device Descriptor ----
 static const tusb_desc_device_t desc_device = {
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
-    .bcdUSB             = 0x0210,  // USB 2.1 — required for BOS/WebUSB
+    .bcdUSB             = 0x0200,  // USB 2.0
     .bDeviceClass       = TUSB_CLASS_MISC,
     .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
     .bDeviceProtocol    = MISC_PROTOCOL_IAD,

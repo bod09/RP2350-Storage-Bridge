@@ -10,17 +10,16 @@ Plug the RP2350-USB-A into a computer — it appears as a generic USB keyboard (
 
 ## How to Access the Web App
 
-Three options — all use the same Web Serial protocol:
+Two options — both use the same Web Serial protocol:
 
-1. **Auto-prompt (Chrome):** Plug in the device, Chrome shows a WebUSB notification linking to the hosted web app. Click it.
-2. **Hosted:** Visit the [GitHub Pages site](https://bod09.github.io/RP2350-Storage-Bridge) — works with PWA offline caching after first load.
-3. **Air-gapped / restricted:** Download `storage-bridge.html` from [Releases](../../releases) and open it locally in Chrome. Works from `file://` with no internet.
+1. **Hosted:** Visit the [GitHub Pages site](https://bod09.github.io/RP2350-Storage-Bridge) — works with PWA offline caching after first load.
+2. **Air-gapped / restricted:** Download `storage-bridge.html` from [Actions](../../actions) artifacts and open it locally in Chrome. Works from `file://` with no internet.
 
 ## Hardware
 
 - **Board:** [Waveshare RP2350-USB-A](https://www.waveshare.com/rp2350-usb-a.htm)
 - **Chip:** RP2350 (dual-core Cortex-M33), 520KB SRAM, 2MB flash
-- **Native USB (Port 0):** Device mode to PC — composite HID keyboard + CDC serial + WebUSB
+- **Native USB (Port 0):** Device mode to PC — composite HID keyboard + CDC serial
 - **PIO USB (Port 1, GPIO 12/13):** Host mode — accepts USB mass storage devices
 
 **Note:** Desolder R13 (1.5k pull-up on D+) for reliable USB host operation.
@@ -76,10 +75,10 @@ python3 tools/bundle.py
 
 ## CI/CD
 
-GitHub Actions automatically:
-- Builds firmware and uploads `.uf2` artifact
-- Bundles web app and uploads single-file HTML artifact
-- Deploys web app to GitHub Pages on push to `main`
+GitHub Actions runs two independent workflows:
+
+- **Build Firmware** (`firmware/**` changes): Compiles firmware, uploads `.uf2` and bundled web app as artifacts
+- **Deploy Web App** (`web/**` changes): Deploys web app to GitHub Pages
 
 ## Serial Protocol
 

@@ -27,6 +27,21 @@ if (COMMAND check_and_add_pico_pio_usb_support)
     check_and_add_pico_pio_usb_support()
 endif()
 
+# ── FatFS setup ──────────────────────────────────────────────────────────────
+# Copy FatFS sources + headers to build dir, replacing ffconf.h with our custom
+# config. This is necessary because GCC's #include "..." searches the source
+# file's own directory first, so the bundled ffconf.h always wins over -I paths.
+set(FATFS_SRC_DIR ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source)
+set(FATFS_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/fatfs)
+file(MAKE_DIRECTORY ${FATFS_BUILD_DIR})
+
+configure_file(${FATFS_SRC_DIR}/ff.c ${FATFS_BUILD_DIR}/ff.c COPYONLY)
+configure_file(${FATFS_SRC_DIR}/ffunicode.c ${FATFS_BUILD_DIR}/ffunicode.c COPYONLY)
+configure_file(${FATFS_SRC_DIR}/ff.h ${FATFS_BUILD_DIR}/ff.h COPYONLY)
+configure_file(${FATFS_SRC_DIR}/diskio.h ${FATFS_BUILD_DIR}/diskio.h COPYONLY)
+# Our custom ffconf.h replaces the bundled default
+configure_file(${CMAKE_CURRENT_LIST_DIR}/src/ffconf.h ${FATFS_BUILD_DIR}/ffconf.h COPYONLY)
+
 add_executable(storage_bridge
     src/main.c
     src/usb_descriptors.c
@@ -35,19 +50,17 @@ add_executable(storage_bridge
     src/msc_diskio.c
     src/file_ops.c
     src/base64.c
-    # FatFS core — compiled via wrappers in src/ so that GCC's quoted-include
-    # search finds our ffconf.h (in src/) before the bundled default.
-    src/fatfs_ff.c
-    src/fatfs_ffunicode.c
+    # FatFS core — compiled from build dir copy that has our ffconf.h
+    ${FATFS_BUILD_DIR}/ff.c
+    ${FATFS_BUILD_DIR}/ffunicode.c
 )
 
 # Include paths:
-# - src/ contains tusb_config.h, board.h, ffconf.h, ff.h, diskio.h
-# ff.h and diskio.h are copied from FatFS source; ffconf.h is our custom config.
-# We do NOT add the FatFS source dir to include paths — that would let the
-# bundled ffconf.h override our settings via GCC's "same directory" search rule.
+# - src/ for tusb_config.h, board.h, and project headers
+# - FATFS_BUILD_DIR for ff.h, diskio.h, ffconf.h (our custom config)
 target_include_directories(storage_bridge PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
+    ${FATFS_BUILD_DIR}
 )
 
 target_compile_definitions(storage_bridge PRIVATE

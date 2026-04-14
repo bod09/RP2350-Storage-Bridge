@@ -431,7 +431,8 @@ void file_op_delete_recursive(const char* path) {
 
 void file_op_format(void) {
     BYTE work[FF_MAX_SS];
-    FRESULT res = f_mkfs("", FM_ANY, 0, work, sizeof(work));
+    MKFS_PARM opt = { FM_ANY, 0, 0, 0, 0 };
+    FRESULT res = f_mkfs("", &opt, work, sizeof(work));
     if (res != FR_OK) { send_error(res); return; }
     cdc_send("{\"status\":\"ok\"}\n");
 }

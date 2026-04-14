@@ -66,4 +66,38 @@ export function initUpload() {
 
     navigateTo(path);
   });
+
+  // Clipboard paste upload
+  document.addEventListener('paste', async (e) => {
+    if (!state.get('driveMounted') || isViewerOpen()) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const path = state.get('currentPath');
+    let uploaded = 0;
+
+    for (const item of items) {
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      // Generate name for pasted items (e.g. pasted-image-2026-04-14.png)
+      const ext = file.type?.split('/')[1] || 'bin';
+      const name = file.name || `pasted-${file.type?.split('/')[0] || 'file'}-${Date.now()}.${ext}`;
+
+      try {
+        const data = new Uint8Array(await file.arrayBuffer());
+        const fullPath = path === '/' ? '/' + name : path + '/' + name;
+        await serial.writeFile(fullPath, data);
+        showToast(`Uploaded ${name}`, 'success');
+        uploaded++;
+      } catch (err) {
+        showToast(`Paste upload failed: ${err.message}`, 'error');
+      }
+    }
+
+    if (uploaded > 0) navigateTo(path);
+  });
 }

@@ -5,7 +5,7 @@ import { formatFileSize } from '../utils/format.js';
 import { showToast } from './toast.js';
 import { confirm } from './dialog.js';
 import { navigateTo } from './file-browser.js';
-import { checkMagicBytes } from '../utils/security.js';
+import { checkMagicBytes, calculateEntropy, getEntropyAssessment, parseExif, stripExif } from '../utils/security.js';
 
 const TEXT_EXTS = new Set([
   'txt','md','json','csv','xml','yaml','yml','toml','ini','cfg','conf','log',
@@ -24,9 +24,11 @@ let viewerEl, contentEl, toolbarEl;
 let currentBlobUrl = null;
 let currentFileName = null;
 let currentCategory = null;
+let currentFileData = null;
 let isDirty = false;
 let isEditing = false;
 let zoomLevel = 1;
+let hexEditData = null; // Uint8Array copy for hex editing
 
 function getExt(name) {
   const dot = name.lastIndexOf('.');
@@ -82,6 +84,11 @@ export function initFileViewer() {
   document.addEventListener('open-file', (e) => {
     openFile(e.detail.name, e.detail.entry);
   });
+
+  // Hash button in viewer
+  $('#viewerHash')?.addEventListener('click', handleHash);
+  // EXIF strip button
+  $('#viewerStripExif')?.addEventListener('click', handleStripExif);
 }
 
 export async function openFile(name, entry) {
@@ -94,6 +101,8 @@ export async function openFile(name, entry) {
   }
 
   currentFileName = name;
+  currentFileData = null;
+  hexEditData = null;
   isDirty = false;
   isEditing = false;
   zoomLevel = 1;
@@ -113,6 +122,7 @@ export async function openFile(name, entry) {
 
   try {
     const data = await serial.readFile(fullPath, size);
+    currentFileData = data;
     renderContent(name, currentCategory, data);
   } catch (e) {
     contentEl.innerHTML = `<div class="viewer-error">Failed to load file: ${escHtml(e.message)}</div>`;
@@ -129,6 +139,35 @@ function renderContent(name, category, data) {
     alert.className = 'security-alert';
     alert.innerHTML = `&#9888; Extension mismatch: file extension says <strong>.${escHtml(getExt(name))}</strong> but content appears to be <strong>${escHtml(mismatch.actual)}</strong>`;
     contentEl.appendChild(alert);
+  }
+
+  // Entropy bar for binary files
+  if (category !== 'text') {
+    const entropy = calculateEntropy(data);
+    const assessment = getEntropyAssessment(entropy);
+    const entropyEl = document.createElement('div');
+    entropyEl.className = `viewer-entropy entropy-${assessment.color}`;
+    const pct = (entropy / 8 * 100).toFixed(1);
+    entropyEl.innerHTML = `<span>Entropy: ${entropy.toFixed(2)} bits/byte (${pct}%)</span><span>${assessment.label}</span>`;
+    contentEl.appendChild(entropyEl);
+  }
+
+  // EXIF info for images
+  if (category === 'image') {
+    const exif = parseExif(data);
+    if (exif) {
+      const exifEl = document.createElement('details');
+      exifEl.className = 'viewer-exif';
+      const entries = Object.entries(exif.tags);
+      exifEl.innerHTML = `<summary>EXIF Metadata (${entries.length} tags)</summary>` +
+        `<table class="exif-table">${entries.map(([k,v]) =>
+          `<tr><td>${escHtml(k)}</td><td>${escHtml(String(v))}</td></tr>`
+        ).join('')}</table>`;
+      contentEl.appendChild(exifEl);
+      // Show strip button
+      const stripBtn = $('#viewerStripExif');
+      if (stripBtn) stripBtn.hidden = false;
+    }
   }
 
   switch (category) {
@@ -169,39 +208,170 @@ function renderPdf(name, data) {
 }
 
 function renderHex(data) {
-  const maxBytes = 256;
-  const slice = data.slice(0, maxBytes);
-  let hex = '';
-  let ascii = '';
-  let lines = [];
+  hexEditData = new Uint8Array(data);
 
-  for (let i = 0; i < slice.length; i++) {
-    if (i > 0 && i % 16 === 0) {
-      lines.push(`${(i - 16).toString(16).padStart(8, '0')}  ${hex} |${ascii}|`);
-      hex = '';
-      ascii = '';
-    }
-    hex += slice[i].toString(16).padStart(2, '0') + ' ';
-    ascii += (slice[i] >= 32 && slice[i] <= 126) ? String.fromCharCode(slice[i]) : '.';
-  }
-
-  if (hex) {
-    const offset = Math.floor((slice.length - 1) / 16) * 16;
-    lines.push(`${offset.toString(16).padStart(8, '0')}  ${hex.padEnd(48)} |${ascii}|`);
-  }
-
-  const pre = document.createElement('pre');
-  pre.className = 'viewer-hex';
-  pre.textContent = lines.join('\n');
+  const container = document.createElement('div');
+  container.className = 'hex-editor';
 
   const info = document.createElement('div');
-  info.className = 'viewer-hex-info';
-  info.textContent = data.length > maxBytes
-    ? `Showing first ${maxBytes} of ${formatFileSize(data.length)}`
-    : `${formatFileSize(data.length)} total`;
+  info.className = 'hex-info-bar';
+  info.innerHTML = `<span>${formatFileSize(data.length)} &middot; ${data.length} bytes</span><span class="hex-cursor-pos">Offset: 0</span>`;
+  container.appendChild(info);
 
-  contentEl.appendChild(info);
-  contentEl.appendChild(pre);
+  const table = document.createElement('div');
+  table.className = 'hex-table';
+
+  const BYTES_PER_ROW = 16;
+  const totalRows = Math.ceil(data.length / BYTES_PER_ROW);
+
+  for (let row = 0; row < totalRows; row++) {
+    const offset = row * BYTES_PER_ROW;
+    const line = document.createElement('div');
+    line.className = 'hex-row';
+
+    // Offset column
+    const offsetEl = document.createElement('span');
+    offsetEl.className = 'hex-offset';
+    offsetEl.textContent = offset.toString(16).padStart(8, '0');
+    line.appendChild(offsetEl);
+
+    // Hex bytes
+    const hexCells = document.createElement('span');
+    hexCells.className = 'hex-cells';
+    for (let col = 0; col < BYTES_PER_ROW; col++) {
+      const idx = offset + col;
+      const cell = document.createElement('span');
+      cell.className = 'hex-cell';
+      if (idx < data.length) {
+        cell.textContent = hexEditData[idx].toString(16).padStart(2, '0');
+        cell.dataset.offset = idx;
+        cell.tabIndex = 0;
+      } else {
+        cell.textContent = '  ';
+        cell.className = 'hex-cell hex-empty';
+      }
+      if (col === 7) {
+        const gap = document.createElement('span');
+        gap.className = 'hex-gap';
+        gap.textContent = ' ';
+        hexCells.appendChild(gap);
+      }
+      hexCells.appendChild(cell);
+    }
+    line.appendChild(hexCells);
+
+    // ASCII column
+    const asciiCells = document.createElement('span');
+    asciiCells.className = 'hex-ascii';
+    for (let col = 0; col < BYTES_PER_ROW; col++) {
+      const idx = offset + col;
+      const ch = document.createElement('span');
+      ch.className = 'hex-ascii-char';
+      if (idx < data.length) {
+        const b = hexEditData[idx];
+        ch.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+        ch.dataset.offset = idx;
+      } else {
+        ch.textContent = ' ';
+      }
+      asciiCells.appendChild(ch);
+    }
+    line.appendChild(asciiCells);
+
+    table.appendChild(line);
+  }
+
+  container.appendChild(table);
+  contentEl.appendChild(container);
+
+  // Hex cell editing
+  let editingCell = null;
+  let editNibble = 0; // 0 = high nibble, 1 = low nibble
+
+  table.addEventListener('click', (e) => {
+    const cell = e.target.closest('.hex-cell[data-offset]');
+    if (!cell) return;
+    selectCell(cell);
+  });
+
+  table.addEventListener('keydown', (e) => {
+    const cell = e.target.closest('.hex-cell[data-offset]');
+    if (!cell) return;
+    const idx = parseInt(cell.dataset.offset);
+
+    // Hex digit input
+    const hexChar = e.key.toLowerCase();
+    if (/^[0-9a-f]$/.test(hexChar)) {
+      e.preventDefault();
+      const nibbleVal = parseInt(hexChar, 16);
+      if (editNibble === 0) {
+        hexEditData[idx] = (nibbleVal << 4) | (hexEditData[idx] & 0x0F);
+        editNibble = 1;
+      } else {
+        hexEditData[idx] = (hexEditData[idx] & 0xF0) | nibbleVal;
+        editNibble = 0;
+        // Move to next cell
+        const next = table.querySelector(`.hex-cell[data-offset="${idx + 1}"]`);
+        if (next) selectCell(next);
+      }
+      updateCellDisplay(cell, idx);
+      isDirty = true;
+      return;
+    }
+
+    // Navigation
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = table.querySelector(`.hex-cell[data-offset="${idx + 1}"]`);
+      if (next) selectCell(next);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (idx > 0) {
+        const prev = table.querySelector(`.hex-cell[data-offset="${idx - 1}"]`);
+        if (prev) selectCell(prev);
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const below = table.querySelector(`.hex-cell[data-offset="${idx + 16}"]`);
+      if (below) selectCell(below);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx >= 16) {
+        const above = table.querySelector(`.hex-cell[data-offset="${idx - 16}"]`);
+        if (above) selectCell(above);
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const next = table.querySelector(`.hex-cell[data-offset="${idx + (e.shiftKey ? -1 : 1)}"]`);
+      if (next) selectCell(next);
+    }
+  });
+
+  function selectCell(cell) {
+    if (editingCell) editingCell.classList.remove('hex-active');
+    editingCell = cell;
+    editNibble = 0;
+    cell.classList.add('hex-active');
+    cell.focus();
+    const idx = parseInt(cell.dataset.offset);
+    const posEl = container.querySelector('.hex-cursor-pos');
+    if (posEl) posEl.textContent = `Offset: 0x${idx.toString(16).toUpperCase()} (${idx})`;
+    // Highlight corresponding ASCII
+    table.querySelectorAll('.hex-ascii-char.hex-active').forEach(el => el.classList.remove('hex-active'));
+    const ascii = table.querySelector(`.hex-ascii-char[data-offset="${idx}"]`);
+    if (ascii) ascii.classList.add('hex-active');
+  }
+
+  function updateCellDisplay(cell, idx) {
+    cell.textContent = hexEditData[idx].toString(16).padStart(2, '0');
+    cell.classList.add('hex-modified');
+    const b = hexEditData[idx];
+    const ascii = table.querySelector(`.hex-ascii-char[data-offset="${idx}"]`);
+    if (ascii) {
+      ascii.textContent = (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+      ascii.classList.add('hex-modified');
+    }
+  }
 }
 
 function startEditing() {
@@ -220,11 +390,29 @@ function startEditing() {
 }
 
 async function saveFile() {
+  const path = state.get('currentPath');
+  const fullPath = path === '/' ? '/' + currentFileName : path + '/' + currentFileName;
+
+  // Hex editor save
+  if (currentCategory === 'unknown' && hexEditData) {
+    if (!isDirty) { showToast('No changes to save', 'info'); return; }
+    try {
+      await serial.writeFile(fullPath, hexEditData);
+      isDirty = false;
+      currentFileData = new Uint8Array(hexEditData);
+      // Clear modified indicators
+      contentEl.querySelectorAll('.hex-modified').forEach(el => el.classList.remove('hex-modified'));
+      showToast(`Saved ${currentFileName}`, 'success');
+    } catch (e) {
+      showToast(`Save failed: ${e.message}`, 'error');
+    }
+    return;
+  }
+
+  // Text editor save
   const textarea = contentEl.querySelector('.viewer-text-edit');
   if (!textarea) return;
 
-  const path = state.get('currentPath');
-  const fullPath = path === '/' ? '/' + currentFileName : path + '/' + currentFileName;
   const data = new TextEncoder().encode(textarea.value);
 
   try {
@@ -257,6 +445,46 @@ function cancelEditing() {
   updateToolbarButtons('text', false);
 }
 
+async function handleHash() {
+  if (!currentFileName) return;
+  const path = state.get('currentPath');
+  const fullPath = path === '/' ? '/' + currentFileName : path + '/' + currentFileName;
+  showToast('Computing hash...', 'info');
+  const hash = await serial.getFileHash(fullPath);
+  if (hash) {
+    await confirm('SHA-256 Hash', `${currentFileName}\n\n${hash}`);
+  } else {
+    showToast('Hash computation failed', 'error');
+  }
+}
+
+async function handleStripExif() {
+  if (!currentFileName || !currentFileData) return;
+  const ok = await confirm('Strip EXIF', 'Remove all EXIF metadata from this image? This will overwrite the file.');
+  if (!ok) return;
+
+  const stripped = stripExif(currentFileData);
+  if (stripped.length === currentFileData.length) {
+    showToast('No EXIF data to strip', 'info');
+    return;
+  }
+
+  const path = state.get('currentPath');
+  const fullPath = path === '/' ? '/' + currentFileName : path + '/' + currentFileName;
+  try {
+    await serial.writeFile(fullPath, stripped);
+    showToast(`Stripped ${formatFileSize(currentFileData.length - stripped.length)} of EXIF data`, 'success');
+    // Reload the file
+    currentFileData = stripped;
+    cleanup();
+    contentEl.innerHTML = '<div class="viewer-loading">Reloading...</div>';
+    renderContent(currentFileName, currentCategory, stripped);
+    updateToolbarButtons(currentCategory, false);
+  } catch (e) {
+    showToast(`Strip failed: ${e.message}`, 'error');
+  }
+}
+
 async function closeViewer() {
   if (isDirty) {
     const ok = await confirm('Unsaved Changes', 'Discard unsaved changes?');
@@ -267,6 +495,8 @@ async function closeViewer() {
   state.set('viewerOpen', false);
   currentFileName = null;
   currentCategory = null;
+  currentFileData = null;
+  hexEditData = null;
   isDirty = false;
   isEditing = false;
   zoomLevel = 1;
@@ -334,10 +564,13 @@ function updateToolbarButtons(category, editing) {
   const zoomInBtn = $('#viewerZoomIn');
   const zoomOutBtn = $('#viewerZoomOut');
   const fullscreenBtn = $('#viewerFullscreen');
+  const hashBtn = $('#viewerHash');
+  const stripBtn = $('#viewerStripExif');
 
-  if (editBtn) editBtn.hidden = category !== 'text' || editing;
-  if (saveBtn) saveBtn.hidden = !editing;
-  if (cancelBtn) cancelBtn.hidden = !editing;
+  const isHex = category === 'unknown';
+  if (editBtn) editBtn.hidden = (category !== 'text') || editing;
+  if (saveBtn) saveBtn.hidden = isHex ? false : !editing;
+  if (cancelBtn) cancelBtn.hidden = isHex ? true : !editing;
 
   const isImage = category === 'image';
   const isMedia = ['image', 'video', 'audio', 'pdf'].includes(category);
@@ -346,6 +579,8 @@ function updateToolbarButtons(category, editing) {
   if (zoomLabel) { zoomLabel.hidden = !isImage; zoomLabel.textContent = '100%'; }
   if (zoomOutBtn) zoomOutBtn.hidden = !isImage;
   if (fullscreenBtn) fullscreenBtn.hidden = !isMedia;
+  if (hashBtn) hashBtn.hidden = false; // Always show hash button
+  if (stripBtn) stripBtn.hidden = true; // Shown only when EXIF detected
 }
 
 function escHtml(s) {

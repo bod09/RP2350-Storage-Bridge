@@ -45,6 +45,7 @@ export function initFileBrowser() {
   state.on('searchFilter', () => renderFileList());
   state.on('sortBy', () => renderFileList());
   state.on('sortAsc', () => renderFileList());
+  state.on('viewMode', () => renderFileList());
 
   document.addEventListener('drive-mounted', () => navigateTo('/'));
   document.addEventListener('drive-unmounted', () => renderEmpty());
@@ -70,7 +71,7 @@ export function initFileBrowser() {
 
   // File row clicks
   fileList?.addEventListener('click', (e) => {
-    const row = e.target.closest('.file-row');
+    const row = e.target.closest('.file-row, .grid-item');
     if (!row) return;
     const name = row.dataset.name;
     const type = row.dataset.type;
@@ -107,7 +108,7 @@ export function initFileBrowser() {
 
   // Double-click to open/preview file
   fileList?.addEventListener('dblclick', (e) => {
-    const row = e.target.closest('.file-row');
+    const row = e.target.closest('.file-row, .grid-item');
     if (!row || row.dataset.type === 'd') return;
     const name = row.dataset.name;
     const entries = state.get('entries') || [];
@@ -115,7 +116,60 @@ export function initFileBrowser() {
     document.dispatchEvent(new CustomEvent('open-file', { detail: { name, entry } }));
   });
 
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (state.get('viewerOpen')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (!state.get('driveMounted')) return;
+
+    const entries = getSortedFiltered();
+    const selected = state.get('selectedFiles') || [];
+    const names = entries.map(en => en.name);
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (entries.length === 0) return;
+      const curIdx = selected.length > 0 ? names.indexOf(selected[selected.length - 1]) : -1;
+      let nextIdx;
+      if (e.key === 'ArrowDown') nextIdx = curIdx < names.length - 1 ? curIdx + 1 : 0;
+      else nextIdx = curIdx > 0 ? curIdx - 1 : names.length - 1;
+      state.set('selectedFiles', [names[nextIdx]]);
+      scrollToRow(names[nextIdx]);
+    } else if (e.key === 'Enter' && selected.length === 1) {
+      e.preventDefault();
+      const entry = entries.find(en => en.name === selected[0]);
+      if (!entry) return;
+      if (entry.type === 'd') {
+        const path = state.get('currentPath');
+        navigateTo(path === '/' ? '/' + entry.name : path + '/' + entry.name);
+      } else {
+        document.dispatchEvent(new CustomEvent('open-file', { detail: { name: entry.name, entry } }));
+      }
+    } else if (e.key === 'Backspace' || (e.key === 'ArrowLeft' && !e.ctrlKey)) {
+      e.preventDefault();
+      const path = state.get('currentPath');
+      if (path !== '/') {
+        const parent = path.substring(0, path.lastIndexOf('/')) || '/';
+        navigateTo(parent);
+      }
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      if (selected.length > 0) document.querySelector('#btnDelete')?.click();
+    } else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      state.set('selectedFiles', names);
+    } else if (e.key === 'Escape') {
+      state.set('selectedFiles', []);
+    }
+  });
+
   renderEmpty();
+}
+
+function scrollToRow(name) {
+  if (!fileList) return;
+  const row = fileList.querySelector(`.file-row[data-name="${CSS.escape(name)}"]`);
+  if (row) row.scrollIntoView({ block: 'nearest' });
 }
 
 export async function navigateTo(path) {
@@ -191,29 +245,49 @@ function renderFileList() {
   if (emptyState) emptyState.hidden = true;
 
   const selected = state.get('selectedFiles') || [];
+  const isGrid = state.get('viewMode') === 'grid';
+  fileList.classList.toggle('grid-view', isGrid);
 
-  fileList.innerHTML = entries.map(entry => {
-    const icon = getIcon(entry);
-    const sel = selected.includes(entry.name) ? ' selected' : '';
-    let size;
-    if (entry.type === 'd') {
-      size = entry.sizeResolved ? formatFileSize(entry.size || 0)
-        : '<span class="size-loading">...</span>';
-    } else {
-      size = formatFileSize(entry.size || 0);
-    }
-    const date = formatDate(entry.modified);
-    const warn = (entry.type !== 'd' && isSuspiciousFile(entry.name))
-      ? `<span class="security-warn severity-${getSeverity(entry.name)}" title="Potentially suspicious file">&#9888;</span>`
-      : '';
+  // Hide column headers in grid view
+  const colHeaders = document.querySelector('.file-list-header');
+  if (colHeaders) colHeaders.hidden = isGrid;
 
-    return `<div class="file-row${sel}" data-name="${escHtml(entry.name)}" data-type="${entry.type}">
-      <div class="file-icon">${icon}</div>
-      <div class="file-name">${warn}${escHtml(entry.name)}</div>
-      <div class="file-size">${size}</div>
-      <div class="file-date">${date}</div>
-    </div>`;
-  }).join('');
+  if (isGrid) {
+    fileList.innerHTML = entries.map(entry => {
+      const icon = getIcon(entry);
+      const sel = selected.includes(entry.name) ? ' selected' : '';
+      const warn = (entry.type !== 'd' && isSuspiciousFile(entry.name))
+        ? `<span class="security-warn severity-${getSeverity(entry.name)}" title="Potentially suspicious file">&#9888;</span>`
+        : '';
+      return `<div class="grid-item${sel}" data-name="${escHtml(entry.name)}" data-type="${entry.type}">
+        <div class="grid-icon">${icon}</div>
+        <div class="grid-name">${warn}${escHtml(entry.name)}</div>
+      </div>`;
+    }).join('');
+  } else {
+    fileList.innerHTML = entries.map(entry => {
+      const icon = getIcon(entry);
+      const sel = selected.includes(entry.name) ? ' selected' : '';
+      let size;
+      if (entry.type === 'd') {
+        size = entry.sizeResolved ? formatFileSize(entry.size || 0)
+          : '<span class="size-loading">...</span>';
+      } else {
+        size = formatFileSize(entry.size || 0);
+      }
+      const date = formatDate(entry.modified);
+      const warn = (entry.type !== 'd' && isSuspiciousFile(entry.name))
+        ? `<span class="security-warn severity-${getSeverity(entry.name)}" title="Potentially suspicious file">&#9888;</span>`
+        : '';
+
+      return `<div class="file-row${sel}" data-name="${escHtml(entry.name)}" data-type="${entry.type}">
+        <div class="file-icon">${icon}</div>
+        <div class="file-name">${warn}${escHtml(entry.name)}</div>
+        <div class="file-size">${size}</div>
+        <div class="file-date">${date}</div>
+      </div>`;
+    }).join('');
+  }
 }
 
 function renderBreadcrumb(path) {
@@ -239,7 +313,7 @@ function renderBreadcrumb(path) {
 function updateSelection() {
   if (!fileList) return;
   const selected = state.get('selectedFiles') || [];
-  fileList.querySelectorAll('.file-row').forEach(row => {
+  fileList.querySelectorAll('.file-row, .grid-item').forEach(row => {
     row.classList.toggle('selected', selected.includes(row.dataset.name));
   });
 }

@@ -2,6 +2,7 @@
 #include "serial_cmd.h"
 #include "base64.h"
 #include "msc_host.h"
+#include "sha256.h"
 #include "ff.h"
 #include "tusb.h"
 #include "hardware/watchdog.h"
@@ -297,4 +298,140 @@ void file_op_dirsize(const char* path) {
                        ",\"files\":%" PRIu32 ",\"dirs\":%" PRIu32 "}\n",
                        path, total_size, file_count, dir_count);
     cdc_write_chunked(buf, len);
+}
+
+void file_op_hash(const char* path) {
+    FIL fil;
+    FRESULT res = f_open(&fil, path, FA_READ);
+    if (res != FR_OK) { send_error(res); return; }
+
+    sha256_ctx ctx;
+    sha256_init(&ctx);
+
+    uint32_t fsize = f_size(&fil);
+    uint32_t remaining = fsize;
+    uint32_t tick = 0;
+
+    while (remaining > 0) {
+        uint32_t chunk = remaining > FILE_CHUNK_SIZE ? FILE_CHUNK_SIZE : remaining;
+        UINT bytes_read = 0;
+        res = f_read(&fil, file_buf, chunk, &bytes_read);
+        if (res != FR_OK) { f_close(&fil); send_error(res); return; }
+        sha256_update(&ctx, file_buf, bytes_read);
+        remaining -= bytes_read;
+
+        if (++tick % 4 == 0) {
+            watchdog_update();
+            tud_task();
+            tuh_task();
+        }
+    }
+
+    f_close(&fil);
+
+    uint8_t hash[32];
+    sha256_final(&ctx, hash);
+
+    char hex[65];
+    for (int i = 0; i < 32; i++) {
+        hex[i * 2]     = "0123456789abcdef"[hash[i] >> 4];
+        hex[i * 2 + 1] = "0123456789abcdef"[hash[i] & 0x0F];
+    }
+    hex[64] = '\0';
+
+    char buf[384];
+    int len = snprintf(buf, sizeof(buf),
+                       "{\"type\":\"hash\",\"path\":\"%s\",\"sha256\":\"%s\","
+                       "\"size\":%" PRIu32 "}\n",
+                       path, hex, fsize);
+    cdc_write_chunked(buf, len);
+}
+
+#define RMRF_MAX_DEPTH 8
+
+void file_op_delete_recursive(const char* path) {
+    // First try simple unlink (works for files and empty dirs)
+    FRESULT res = f_unlink(path);
+    if (res == FR_OK) {
+        cdc_send("{\"status\":\"ok\"}\n");
+        return;
+    }
+
+    // Must be a non-empty directory — walk and delete bottom-up
+    DIR dir_stack[RMRF_MAX_DEPTH];
+    // Phase flags: 0 = scanning entries, 1 = done scanning (ready to delete dir)
+    uint8_t phase[RMRF_MAX_DEPTH];
+    int depth = 0;
+    FILINFO fno;
+    char pathbuf[256];
+    uint32_t tick = 0;
+
+    strncpy(pathbuf, path, sizeof(pathbuf) - 1);
+    pathbuf[sizeof(pathbuf) - 1] = '\0';
+
+    res = f_opendir(&dir_stack[0], pathbuf);
+    if (res != FR_OK) { send_error(res); return; }
+    phase[0] = 0;
+
+    while (depth >= 0) {
+        if (++tick % 20 == 0) {
+            watchdog_update();
+            tud_task();
+            tuh_task();
+        }
+
+        res = f_readdir(&dir_stack[depth], &fno);
+        if (res != FR_OK || fno.fname[0] == '\0') {
+            // End of directory — close and delete the now-empty dir
+            f_closedir(&dir_stack[depth]);
+            if (depth > 0) {
+                f_unlink(pathbuf);
+                char* slash = strrchr(pathbuf, '/');
+                if (slash && slash != pathbuf) *slash = '\0';
+                else if (slash == pathbuf) pathbuf[1] = '\0';
+            }
+            depth--;
+            continue;
+        }
+
+        if (fno.fname[0] == '.') continue;
+
+        // Build full path for this entry
+        size_t plen = strlen(pathbuf);
+        bool needs_slash = (plen > 0 && pathbuf[plen - 1] != '/');
+        int written = snprintf(pathbuf + plen, sizeof(pathbuf) - plen,
+                               "%s%s", needs_slash ? "/" : "", fno.fname);
+        if (plen + written >= sizeof(pathbuf)) {
+            pathbuf[plen] = '\0';
+            continue; // path too long, skip
+        }
+
+        if (fno.fattrib & AM_DIR) {
+            if (depth + 1 < RMRF_MAX_DEPTH) {
+                depth++;
+                res = f_opendir(&dir_stack[depth], pathbuf);
+                if (res != FR_OK) {
+                    pathbuf[plen] = '\0';
+                    depth--;
+                }
+                phase[depth] = 0;
+            } else {
+                pathbuf[plen] = '\0'; // too deep
+            }
+        } else {
+            f_unlink(pathbuf);
+            pathbuf[plen] = '\0';
+        }
+    }
+
+    // Delete the root directory itself
+    f_unlink(path);
+    cdc_send("{\"status\":\"ok\"}\n");
+}
+
+void file_op_format(void) {
+    BYTE work[FF_MAX_SS];
+    FRESULT res = f_mkfs("", FM_ANY, 0, work, sizeof(work));
+    if (res != FR_OK) { send_error(res); return; }
+    cdc_send("{\"status\":\"ok\"}\n");
 }

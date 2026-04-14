@@ -17,5 +17,8 @@ void file_op_write(const char* path, uint32_t offset,
                    const uint8_t* data, uint32_t data_len, bool done);
 void file_op_df(void);
 void file_op_dirsize(const char* path);
+void file_op_hash(const char* path);
+void file_op_delete_recursive(const char* path);
+void file_op_format(void);
 
 #endif // FILE_OPS_H

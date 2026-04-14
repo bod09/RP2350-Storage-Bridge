@@ -1,4 +1,4 @@
-const CACHE_NAME = 'storage-bridge-v3';
+const CACHE_NAME = 'storage-bridge-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -29,6 +29,7 @@ const ASSETS = [
   './js/components/dialog.js',
   './js/components/file-viewer.js',
   './js/utils/security.js',
+  './js/utils/zip.js',
 ];
 
 self.addEventListener('install', (e) => {

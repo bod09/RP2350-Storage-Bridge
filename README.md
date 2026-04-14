@@ -13,8 +13,11 @@ Built for incident response, security research, air-gapped environments, and any
 | **Autorun / malware execution** | Drive is never mounted by your PC — no autorun, no shell extensions, no thumbnail handlers |
 | **Filesystem driver exploits** | Your OS filesystem drivers (NTFS, exFAT, etc.) never touch the drive. FatFS on the RP2350 parses the filesystem in an isolated environment |
 | **Malicious USB device attacks** | The drive connects to the RP2350's USB host port, not your PC. Your PC only sees a standard HID keyboard + CDC serial device |
-| **Content inspection** | Built-in file preview (text, images, audio, video, PDF) lets you examine contents without downloading. Magic bytes mismatch detection flags files where the extension doesn't match the actual content |
-| **Suspicious file detection** | Known dangerous extensions (.exe, .bat, .ps1, .vbs, .scr, autorun.inf, etc.) are flagged with warning icons. Security scan summarizes threats in the current directory |
+| **Content inspection** | Built-in file preview (text, images, audio, video, PDF, hex editor) lets you examine contents without downloading. Magic bytes mismatch detection flags files where the extension doesn't match the actual content |
+| **Suspicious file detection** | Known dangerous extensions (.exe, .bat, .ps1, .vbs, .scr, autorun.inf, etc.) are flagged with warning icons. Recursive security scan with exportable reports |
+| **Entropy analysis** | Shannon entropy calculation flags encrypted, compressed, or packed files that may be obfuscated malware |
+| **File hashing** | On-device SHA-256 hashing — verify file integrity without downloading |
+| **EXIF metadata** | View and strip EXIF metadata from JPEG images — remove GPS coordinates, camera info, and other identifying data before downloading |
 | **Browser sandbox** | All file rendering happens inside the browser's sandboxed environment — even if you preview a malicious file, it can't escape the browser sandbox |
 
 ### Limitations
@@ -26,10 +29,17 @@ Built for incident response, security research, air-gapped environments, and any
 
 ## Features
 
-- **File browser** — Navigate directories, upload, download, rename, delete files on the USB drive
-- **File preview & edit** — Open files directly in the browser: text (with editing), images, audio, video, PDF, and hex dump for unknown formats
+- **File browser** — Navigate directories with list or grid view, upload, download, rename, delete files
+- **File preview & edit** — Text editor, image viewer with zoom, audio/video player, PDF viewer, full hex editor with byte-level editing
+- **Multi-file ZIP download** — Select multiple files and download as a single ZIP archive
+- **Clipboard paste upload** — Paste images or files from clipboard directly into the file browser
 - **Folder sizes** — Directories show total recursive size (calculated on-device)
-- **Security scanning** — Warning icons on suspicious files, magic bytes mismatch detection, one-click threat scan
+- **SHA-256 hashing** — Compute file hashes on-device for integrity verification
+- **Security scanning** — Recursive threat scan with warning icons, entropy analysis, magic bytes mismatch detection, exportable scan reports
+- **EXIF viewer & stripper** — Inspect and remove EXIF metadata from JPEG images
+- **Recursive delete** — Delete directories and all their contents in one operation
+- **Format drive** — Reformat the drive from the settings page
+- **Keyboard shortcuts** — Arrow keys, Enter, Delete, Ctrl+A, Backspace navigation
 - **Air-gap indicator** — Visual confirmation that the drive is accessed through the RP2350, not directly by your PC
 - **PWA support** — Installable as a standalone app with offline caching
 
@@ -122,6 +132,9 @@ Newline-delimited JSON over CDC serial. Commands:
 | `{"cmd":"delete","path":"/file.txt"}` | Delete file/directory |
 | `{"cmd":"rename","from":"/old","to":"/new"}` | Rename/move |
 | `{"cmd":"dirsize","path":"/dir"}` | Recursive directory size |
+| `{"cmd":"hash","path":"/file.txt"}` | SHA-256 file hash |
+| `{"cmd":"rmdir","path":"/dir"}` | Recursive directory delete |
+| `{"cmd":"format"}` | Format drive |
 | `{"cmd":"df"}` | Disk free space |
 | `{"cmd":"eject"}` | Safe unmount |
 | `{"cmd":"status"}` | Drive status |

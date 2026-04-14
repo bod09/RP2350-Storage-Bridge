@@ -58,6 +58,9 @@
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 16px;
+  white-space: pre-wrap;
+  max-height: 50vh;
+  overflow-y: auto;
 }
 
 .modal-content .input-group {
@@ -208,6 +211,16 @@
   height: 14px;
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+/* Danger button */
+.danger {
+  color: var(--error) !important;
+  border-color: var(--error) !important;
+}
+
+.danger:hover {
+  background: rgba(255, 59, 48, 0.1) !important;
 }
 
 /* Hidden file input */

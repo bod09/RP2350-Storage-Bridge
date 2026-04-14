@@ -174,6 +174,20 @@ export async function getDirSize(path) {
   return null;
 }
 
+export async function getFileHash(path) {
+  const resp = await sendCommand({ cmd: 'hash', path });
+  if (resp?.status === 'ok') return resp.hash;
+  return null;
+}
+
+export async function deleteRecursive(path) {
+  return await sendCommand({ cmd: 'rmdir', path });
+}
+
+export async function formatDrive() {
+  return await sendCommand({ cmd: 'format' });
+}
+
 export async function listDirectory(path) {
   const resp = await sendCommand({ cmd: 'ls', path });
   if (resp?.type === 'ls') {

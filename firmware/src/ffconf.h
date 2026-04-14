@@ -11,7 +11,7 @@
 #define FF_FS_READONLY    0     // Read-write
 #define FF_FS_MINIMIZE    0     // Full API
 #define FF_USE_FIND       1     // f_findfirst / f_findnext
-#define FF_USE_MKFS       0     // No formatting support
+#define FF_USE_MKFS       1     // Enable formatting support
 #define FF_USE_FASTSEEK   0
 #define FF_USE_EXPAND     0
 #define FF_USE_CHMOD      0

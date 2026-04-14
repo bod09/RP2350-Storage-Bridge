@@ -205,6 +205,24 @@ static void process_command(const char* cmd) {
         json_get_string(cmd, "path", path, sizeof(path));
         file_op_dirsize(path);
     }
+    else if (strstr(cmd, "\"cmd\":\"hash\"")) {
+        if (!info->mounted) { cdc_send("{\"status\":\"error\",\"msg\":\"No drive\"}\n"); return; }
+        if (!json_get_string(cmd, "path", path, sizeof(path))) {
+            cdc_send("{\"status\":\"error\",\"msg\":\"Missing path\"}\n"); return;
+        }
+        file_op_hash(path);
+    }
+    else if (strstr(cmd, "\"cmd\":\"rmdir\"")) {
+        if (!info->mounted) { cdc_send("{\"status\":\"error\",\"msg\":\"No drive\"}\n"); return; }
+        if (!json_get_string(cmd, "path", path, sizeof(path))) {
+            cdc_send("{\"status\":\"error\",\"msg\":\"Missing path\"}\n"); return;
+        }
+        file_op_delete_recursive(path);
+    }
+    else if (strstr(cmd, "\"cmd\":\"format\"")) {
+        if (!info->mounted) { cdc_send("{\"status\":\"error\",\"msg\":\"No drive\"}\n"); return; }
+        file_op_format();
+    }
     else if (strstr(cmd, "\"cmd\":\"df\"")) {
         file_op_df();
     }

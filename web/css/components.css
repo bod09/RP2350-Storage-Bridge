@@ -167,6 +167,13 @@
 
 .settings-row:last-child { border-bottom: none; }
 
+.settings-detail {
+  padding: 6px 0;
+  font-family: var(--font-mono);
+}
+
+.settings-detail[hidden] { display: none; }
+
 /* Security warning icon in file list */
 .security-warn {
   margin-right: 4px;

@@ -1,5 +1,6 @@
 #include "msc_host.h"
 #include "serial_cmd.h"
+#include "file_ops.h"
 #include "tusb.h"
 #include "ff.h"
 #include "diskio.h"
@@ -52,9 +53,23 @@ bool msc_disk_io_complete(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_da
 static void do_mount(uint8_t dev_addr) {
     drive_info.dev_addr = dev_addr;
 
-    // Get disk geometry
+    // Get and validate disk geometry from untrusted device
     uint32_t block_count = tuh_msc_get_block_count(dev_addr, 0);
     uint32_t block_size = tuh_msc_get_block_size(dev_addr, 0);
+
+    // Sanity check: block size must be 512, 1024, 2048, or 4096
+    if (block_size < 512 || block_size > 4096 || (block_size & (block_size - 1)) != 0) {
+        cdc_send("{\"type\":\"drive\",\"mounted\":false,\"error\":\"Invalid block size reported by device\"}\n");
+        drive_info.dev_addr = 0;
+        return;
+    }
+
+    // Sanity check: block count should be reasonable (max ~2TB at 512-byte sectors)
+    if (block_count == 0 || block_count > 0xFFFFFFFF / block_size) {
+        cdc_send("{\"type\":\"drive\",\"mounted\":false,\"error\":\"Invalid capacity reported by device\"}\n");
+        drive_info.dev_addr = 0;
+        return;
+    }
 
     // Mount FatFS
     FRESULT res = f_mount(&fatfs, "", 1);
@@ -97,12 +112,15 @@ static void do_mount(uint8_t dev_addr) {
 
     drive_info.mounted = true;
 
-    // Notify web app
-    char buf[256];
+    // Notify web app (escape label — it comes from untrusted drive)
+    char safe_label[72];
+    json_escape(safe_label, sizeof(safe_label), drive_info.label);
+
+    char buf[320];
     snprintf(buf, sizeof(buf),
              "{\"type\":\"drive\",\"mounted\":true,\"label\":\"%s\",\"fs\":\"%s\","
              "\"total\":%" PRIu64 ",\"free\":%" PRIu64 "}\n",
-             drive_info.label, drive_info.fs_type,
+             safe_label, drive_info.fs_type,
              drive_info.total_bytes, drive_info.free_bytes);
     cdc_write_chunked(buf, strlen(buf));
 }

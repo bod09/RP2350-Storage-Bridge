@@ -2,12 +2,20 @@
 #include "file_ops.h"
 #include "msc_host.h"
 #include "base64.h"
+#include "sha256.h"
 #include "tusb.h"
 #include "pico/bootrom.h"
 #include "hardware/watchdog.h"
+#include "hardware/flash.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+// Firmware flash size (we hash from XIP_BASE up to this size)
+// The linker puts __flash_binary_end at the end of the firmware image.
+extern char __flash_binary_end;
+#define FW_START ((const uint8_t*)XIP_BASE)
+#define FW_SIZE  ((uint32_t)((uintptr_t)&__flash_binary_end - XIP_BASE))
 
 static char serial_buf[32768];
 static int serial_buf_len = 0;
@@ -235,15 +243,43 @@ static void process_command(const char* cmd) {
     }
     else if (strstr(cmd, "\"cmd\":\"status\"")) {
         if (info->mounted) {
-            char buf[256];
+            char safe_label[72];
+            json_escape(safe_label, sizeof(safe_label), info->label);
+            char buf[320];
             snprintf(buf, sizeof(buf),
                      "{\"type\":\"drive\",\"mounted\":true,\"label\":\"%s\",\"fs\":\"%s\","
                      "\"total\":%" PRIu64 ",\"free\":%" PRIu64 "}\n",
-                     info->label, info->fs_type, info->total_bytes, info->free_bytes);
+                     safe_label, info->fs_type, info->total_bytes, info->free_bytes);
             cdc_write_chunked(buf, strlen(buf));
         } else {
             cdc_send("{\"type\":\"drive\",\"mounted\":false}\n");
         }
+    }
+    else if (strstr(cmd, "\"cmd\":\"fwcheck\"")) {
+        // Compute SHA-256 of firmware flash image for integrity verification
+        sha256_ctx ctx;
+        sha256_init(&ctx);
+        uint32_t fw_size = FW_SIZE;
+        const uint8_t* fw_ptr = FW_START;
+        for (uint32_t off = 0; off < fw_size; off += 4096) {
+            uint32_t chunk = fw_size - off;
+            if (chunk > 4096) chunk = 4096;
+            sha256_update(&ctx, fw_ptr + off, chunk);
+            watchdog_update();
+        }
+        uint8_t hash[32];
+        sha256_final(&ctx, hash);
+        char hex[65];
+        for (int i = 0; i < 32; i++) {
+            hex[i * 2]     = "0123456789abcdef"[hash[i] >> 4];
+            hex[i * 2 + 1] = "0123456789abcdef"[hash[i] & 0x0F];
+        }
+        hex[64] = '\0';
+        char buf[160];
+        snprintf(buf, sizeof(buf),
+                 "{\"status\":\"ok\",\"hash\":\"%s\",\"size\":%" PRIu32 "}\n",
+                 hex, fw_size);
+        cdc_write_chunked(buf, strlen(buf));
     }
     else if (strstr(cmd, "\"cmd\":\"bootloader\"")) {
         cdc_send("{\"status\":\"rebooting\"}\n");
@@ -285,12 +321,14 @@ void serial_cmd_task(void) {
         if (serial_buf[0] == '{') {
             process_command(serial_buf);
         }
-        // Shift remaining data
-        int remaining = serial_buf_len - (int)(nl - serial_buf) - 1;
-        if (remaining > 0) {
-            memmove(serial_buf, nl + 1, remaining);
+        // Shift remaining data (use unsigned arithmetic to prevent underflow)
+        uint32_t consumed = (uint32_t)(nl - serial_buf) + 1;
+        if (consumed >= (uint32_t)serial_buf_len) {
+            serial_buf_len = 0;
+        } else {
+            serial_buf_len -= consumed;
+            memmove(serial_buf, nl + 1, serial_buf_len);
         }
-        serial_buf_len = remaining;
         serial_buf[serial_buf_len] = '\0';
     }
 }

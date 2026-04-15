@@ -21,4 +21,7 @@ void file_op_hash(const char* path);
 void file_op_delete_recursive(const char* path);
 void file_op_format(void);
 
+// Escape a string for safe JSON embedding (handles untrusted filenames/labels)
+int json_escape(char* dst, int max_len, const char* src);
+
 #endif // FILE_OPS_H

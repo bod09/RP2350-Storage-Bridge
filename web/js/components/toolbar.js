@@ -27,6 +27,7 @@ export function initToolbar() {
 
   uploadInput?.addEventListener('change', handleUploadFiles);
   $('#btnFormat')?.addEventListener('click', handleFormat);
+  $('#btnFwCheck')?.addEventListener('click', handleFwCheck);
 
   document.addEventListener('download-file', (e) => {
     downloadFile(e.detail);
@@ -214,6 +215,27 @@ async function handleEject() {
 
 async function handleRefresh() {
   navigateTo(state.get('currentPath'));
+}
+
+async function handleFwCheck() {
+  if (!state.get('connected')) {
+    showToast('Not connected', 'error');
+    return;
+  }
+  showToast('Computing firmware hash...', 'info');
+  const resp = await serial.sendCommand({ cmd: 'fwcheck' });
+  const resultEl = $('#fwCheckResult');
+  if (resp?.status === 'ok') {
+    if (resultEl) {
+      resultEl.hidden = false;
+      resultEl.innerHTML =
+        `<code style="font-size:11px;word-break:break-all;">SHA-256: ${resp.hash}</code><br>` +
+        `<span style="font-size:11px;color:var(--text-tertiary);">Size: ${resp.size} bytes</span>`;
+    }
+    showToast('Firmware hash computed', 'success');
+  } else {
+    showToast('Firmware check failed', 'error');
+  }
 }
 
 async function handleFormat() {

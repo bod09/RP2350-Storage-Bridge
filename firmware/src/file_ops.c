@@ -16,6 +16,37 @@
 static uint8_t file_buf[FILE_CHUNK_SIZE];
 static char b64_buf[BASE64_ENCODE_SIZE(FILE_CHUNK_SIZE)];
 
+// JSON-safe string escape (handles untrusted filenames from USB drives)
+// Writes escaped version of src into dst, returns bytes written (excluding NUL).
+// Truncates if output would exceed max_len-1.
+int json_escape(char* dst, int max_len, const char* src) {
+    int o = 0;
+    for (int i = 0; src[i] && o < max_len - 1; i++) {
+        char c = src[i];
+        if (c == '"' || c == '\\') {
+            if (o + 2 > max_len - 1) break;
+            dst[o++] = '\\';
+            dst[o++] = c;
+        } else if (c == '\n') {
+            if (o + 2 > max_len - 1) break;
+            dst[o++] = '\\'; dst[o++] = 'n';
+        } else if (c == '\r') {
+            if (o + 2 > max_len - 1) break;
+            dst[o++] = '\\'; dst[o++] = 'r';
+        } else if (c == '\t') {
+            if (o + 2 > max_len - 1) break;
+            dst[o++] = '\\'; dst[o++] = 't';
+        } else if ((unsigned char)c < 0x20) {
+            // Control characters — skip them
+            continue;
+        } else {
+            dst[o++] = c;
+        }
+    }
+    dst[o] = '\0';
+    return o;
+}
+
 // FatFS error to string
 static const char* fresult_str(FRESULT r) {
     switch (r) {
@@ -79,14 +110,17 @@ void file_op_ls(const char* path) {
     while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0') {
         if (fno.fname[0] == '.') continue;  // skip . and ..
 
-        char entry[384];
+        char safe_name[520]; // 255 chars * 2 (worst-case escape) + NUL
+        json_escape(safe_name, sizeof(safe_name), fno.fname);
+
+        char entry[640];
         uint32_t ts = fattime_to_epoch(fno.fdate, fno.ftime);
         const char* type = (fno.fattrib & AM_DIR) ? "d" : "f";
 
         int len = snprintf(entry, sizeof(entry),
                            "%s{\"name\":\"%s\",\"size\":%" PRIu32 ",\"type\":\"%s\",\"modified\":%" PRIu32 "}",
                            first ? "" : ",",
-                           fno.fname, (uint32_t)fno.fsize, type, ts);
+                           safe_name, (uint32_t)fno.fsize, type, ts);
         cdc_write_chunked(entry, len);
         first = false;
     }
@@ -103,11 +137,14 @@ void file_op_stat(const char* path) {
     uint32_t ts = fattime_to_epoch(fno.fdate, fno.ftime);
     const char* type = (fno.fattrib & AM_DIR) ? "d" : "f";
 
-    char buf[384];
+    char safe_name[520];
+    json_escape(safe_name, sizeof(safe_name), fno.fname);
+
+    char buf[640];
     int len = snprintf(buf, sizeof(buf),
                        "{\"type\":\"stat\",\"name\":\"%s\",\"size\":%" PRIu32 ","
                        "\"ftype\":\"%s\",\"modified\":%" PRIu32 "}\n",
-                       fno.fname, (uint32_t)fno.fsize, type, ts);
+                       safe_name, (uint32_t)fno.fsize, type, ts);
     cdc_write_chunked(buf, len);
 }
 

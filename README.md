@@ -18,11 +18,40 @@ Built for incident response, security research, air-gapped environments, and any
 | **Entropy analysis** | Shannon entropy calculation flags encrypted, compressed, or packed files that may be obfuscated malware |
 | **File hashing** | On-device SHA-256 hashing — verify file integrity without downloading |
 | **EXIF metadata** | View and strip EXIF metadata from JPEG images — remove GPS coordinates, camera info, and other identifying data before downloading |
+| **Firmware integrity** | `Verify Firmware` button computes SHA-256 of the flash image — compare against known-good hash from the build to detect tampering |
+| **Input sanitization** | All data from the untrusted drive (filenames, volume labels) is JSON-escaped before transmission to prevent protocol injection |
+| **Device validation** | Block size and capacity reported by USB devices are validated before mounting — rejects devices reporting impossible geometry |
+| **I/O timeouts** | Disk operations have a 5-second timeout — a malicious device that stalls transfers triggers a timeout instead of hanging the firmware |
 | **Browser sandbox** | All file rendering happens inside the browser's sandboxed environment — even if you preview a malicious file, it can't escape the browser sandbox |
+
+### Firmware Security
+
+The RP2350 processes USB packets from untrusted drives. Here's the realistic risk assessment:
+
+**Can a malicious drive infect the RP2350?** It's extremely unlikely but not theoretically impossible. The attack surface is the TinyUSB USB host stack (device descriptors, MSC protocol) and FatFS (filesystem parsing of FAT/exFAT structures). Both are widely-used libraries, but all code has bugs.
+
+**What happens if it did?** The firmware runs from flash. A power cycle always returns to the firmware image stored in flash. An attacker who achieved code execution would need to additionally call the Pico SDK flash write APIs to persist — a multi-stage attack.
+
+**Mitigations in place:**
+- 8-second watchdog timer resets the device on hangs (e.g., malicious cluster loops)
+- 5-second I/O timeout on all USB transfers prevents device-side stalling
+- Block size/capacity validation rejects devices with impossible geometry
+- Firmware integrity check lets you verify flash hasn't been modified
+- All untrusted strings (filenames, labels) are escaped before serial output
+- File I/O bounds checking prevents reads beyond file/chunk boundaries
+- No dynamic memory allocation (no heap exploits)
+- No state from USB drives is persisted to flash
+
+**What's NOT currently enabled** (available in RP2350 hardware but not yet configured):
+- ARM TrustZone / SAU (Secure/Non-Secure memory partitioning)
+- MPU (Memory Protection Unit — could enforce W^X)
+- Secure Boot (OTP-based firmware signature verification)
+- JTAG lock (debug port is accessible on board)
+- Glitch detection hardware
 
 ### Limitations
 
-- The RP2350 firmware itself processes USB packets and filesystem data from the untrusted drive. A sufficiently crafted drive could theoretically exploit the firmware (TinyUSB USB host stack, FatFS parser). This is not antivirus.
+- The RP2350 firmware processes USB packets and filesystem data from untrusted drives. A sufficiently crafted drive could theoretically exploit the TinyUSB host stack or FatFS parser. This is not antivirus.
 - Only FAT12/16/32 and exFAT filesystems are supported. NTFS, ext4, HFS+, etc. drives will not be readable.
 - Magic bytes detection covers common file types but is not exhaustive. It's a best-effort heuristic, not a signature scanner.
 - File preview renders content in the browser. While sandboxed, previewing untrusted HTML/SVG/JS files means executing that code in your browser's renderer.
@@ -138,4 +167,5 @@ Newline-delimited JSON over CDC serial. Commands:
 | `{"cmd":"df"}` | Disk free space |
 | `{"cmd":"eject"}` | Safe unmount |
 | `{"cmd":"status"}` | Drive status |
+| `{"cmd":"fwcheck"}` | SHA-256 hash of firmware flash image |
 | `{"cmd":"bootloader"}` | Reboot to UF2 bootloader |

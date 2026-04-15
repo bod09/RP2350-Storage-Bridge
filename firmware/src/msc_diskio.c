@@ -5,18 +5,29 @@
 #include "ff.h"
 #include "diskio.h"
 #include "msc_host.h"
+#include "pico/time.h"
 #include "hardware/watchdog.h"
 
 // Defined in msc_host.c
 extern volatile bool msc_disk_busy;
 extern bool msc_disk_io_complete(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_data);
 
-static void wait_for_disk_io(void) {
+// Timeout for a single disk I/O operation (milliseconds)
+#define DISK_IO_TIMEOUT_MS 5000
+
+// Returns true on success, false on timeout
+static bool wait_for_disk_io(void) {
+    absolute_time_t deadline = make_timeout_time_ms(DISK_IO_TIMEOUT_MS);
     while (msc_disk_busy) {
+        if (time_reached(deadline)) {
+            msc_disk_busy = false;
+            return false; // Timeout — malicious or broken device
+        }
         tuh_task();
         tud_task();
         watchdog_update();
     }
+    return true;
 }
 
 DSTATUS disk_status(BYTE pdrv) {
@@ -36,11 +47,11 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) {
     const DriveInfo* info = msc_get_drive_info();
     uint8_t dev_addr = info->dev_addr;
     if (!dev_addr) return RES_NOTRDY;
+    if (count > 128) count = 128; // Clamp to prevent uint16_t overflow
 
     msc_disk_busy = true;
     tuh_msc_read10(dev_addr, 0, buff, sector, (uint16_t)count, msc_disk_io_complete, 0);
-    wait_for_disk_io();
-    return RES_OK;
+    return wait_for_disk_io() ? RES_OK : RES_ERROR;
 }
 
 #if FF_FS_READONLY == 0
@@ -49,11 +60,11 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count) {
     const DriveInfo* info = msc_get_drive_info();
     uint8_t dev_addr = info->dev_addr;
     if (!dev_addr) return RES_NOTRDY;
+    if (count > 128) count = 128; // Clamp to prevent uint16_t overflow
 
     msc_disk_busy = true;
     tuh_msc_write10(dev_addr, 0, buff, sector, (uint16_t)count, msc_disk_io_complete, 0);
-    wait_for_disk_io();
-    return RES_OK;
+    return wait_for_disk_io() ? RES_OK : RES_ERROR;
 }
 #endif
 

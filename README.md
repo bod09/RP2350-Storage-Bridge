@@ -59,17 +59,22 @@ The RP2350 processes USB packets from untrusted drives. Here's the realistic ris
 
 ## Features
 
-- **File browser** — Navigate directories with list or grid view, upload, download, rename, delete files
-- **File preview & edit** — Text editor, image viewer with zoom, audio/video player, PDF viewer, full hex editor with byte-level editing
+- **File browser** — Navigate directories with list or grid view, sortable columns (name, size, date), real-time search filter
+- **File selection** — Click, Shift+click range select, Ctrl+click multi-select, Ctrl+A select all
+- **File preview & edit** — Text editor with save, image viewer with zoom percentage, audio/video player, PDF viewer, fullscreen mode
+- **Hex editor** — Full byte-level editor with nibble editing, arrow/tab navigation, save changes back to drive
+- **Drag-and-drop upload** — Drop files onto the browser, or paste from clipboard
 - **Multi-file ZIP download** — Select multiple files and download as a single ZIP archive
-- **Clipboard paste upload** — Paste images or files from clipboard directly into the file browser
+- **Transfer progress** — Real-time progress bar with speed display for uploads and downloads
 - **Folder sizes** — Directories show total recursive size (calculated on-device)
 - **SHA-256 hashing** — Compute file hashes on-device for integrity verification
 - **Security scanning** — Recursive threat scan with warning icons, entropy analysis, magic bytes mismatch detection, exportable scan reports
-- **EXIF viewer & stripper** — Inspect and remove EXIF metadata from JPEG images
+- **EXIF viewer & stripper** — Inspect camera, GPS, and metadata tags; strip EXIF from JPEGs before downloading
 - **Recursive delete** — Delete directories and all their contents in one operation
-- **Format drive** — Reformat the drive from the settings page
-- **Keyboard shortcuts** — Arrow keys, Enter, Delete, Ctrl+A, Backspace navigation
+- **Format drive** — Reformat the drive from the settings page (double confirmation)
+- **Firmware management** — Verify firmware integrity (SHA-256), reboot to UF2 bootloader
+- **Keyboard shortcuts** — Arrow keys, Enter, Delete, Ctrl+A, Backspace, Escape navigation
+- **Theme toggle** — Light, dark, and system theme with persistence
 - **Air-gap indicator** — Visual confirmation that the drive is accessed through the RP2350, not directly by your PC
 - **PWA support** — Installable as a standalone app with offline caching
 
@@ -156,6 +161,7 @@ Newline-delimited JSON over CDC serial. Commands:
 | Command | Description |
 |---------|-------------|
 | `{"cmd":"ls","path":"/"}` | List directory |
+| `{"cmd":"stat","path":"/file.txt"}` | File/directory info (size, type, modified) |
 | `{"cmd":"read","path":"/file.txt","offset":0,"length":8192}` | Read file chunk (base64) |
 | `{"cmd":"write","path":"/file.txt","offset":0,"data":"...","done":true}` | Write file chunk (base64) |
 | `{"cmd":"mkdir","path":"/dir"}` | Create directory |

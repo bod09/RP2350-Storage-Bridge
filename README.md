@@ -22,6 +22,7 @@ Built for incident response, security research, air-gapped environments, and any
 | **Input sanitization** | All data from the untrusted drive (filenames, volume labels) is JSON-escaped before transmission to prevent protocol injection |
 | **Device validation** | Block size and capacity reported by USB devices are validated before mounting — rejects devices reporting impossible geometry |
 | **I/O timeouts** | Disk operations have a 5-second timeout — a malicious device that stalls transfers triggers a timeout instead of hanging the firmware |
+| **Memory protection (MPU)** | ARM Cortex-M33 MPU enforces W^X — flash is read-only+executable, data buffers and stack are non-executable. Buffer overflows can't inject runnable shellcode |
 | **Browser sandbox** | All file rendering happens inside the browser's sandboxed environment — even if you preview a malicious file, it can't escape the browser sandbox |
 
 ### Firmware Security
@@ -41,10 +42,10 @@ The RP2350 processes USB packets from untrusted drives. Here's the realistic ris
 - File I/O bounds checking prevents reads beyond file/chunk boundaries
 - No dynamic memory allocation (no heap exploits)
 - No state from USB drives is persisted to flash
+- MPU enforces W^X (Write XOR Execute) — flash is read-only+executable, BSS/heap/stack are read-write but non-executable, preventing injected shellcode from running
 
 **What's NOT currently enabled** (available in RP2350 hardware but not yet configured):
 - ARM TrustZone / SAU (Secure/Non-Secure memory partitioning)
-- MPU (Memory Protection Unit — could enforce W^X)
 - Secure Boot (OTP-based firmware signature verification)
 - JTAG lock (debug port is accessible on board)
 - Glitch detection hardware

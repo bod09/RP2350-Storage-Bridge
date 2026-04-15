@@ -51,6 +51,7 @@ add_executable(storage_bridge
     src/file_ops.c
     src/base64.c
     src/sha256.c
+    src/mpu_setup.c
     # FatFS core — compiled from build dir copy that has our ffconf.h
     ${FATFS_BUILD_DIR}/ff.c
     ${FATFS_BUILD_DIR}/ffunicode.c

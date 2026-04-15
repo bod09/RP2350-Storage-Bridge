@@ -16,6 +16,7 @@
 #endif
 #include "serial_cmd.h"
 #include "msc_host.h"
+#include "mpu_setup.h"
 
 // ─── SOF Timer ─────────────────���──────────────────────────────────────────────
 static repeating_timer_t sof_timer_handle;
@@ -99,6 +100,10 @@ int main(void) {
 
     // Enable watchdog (8 second timeout)
     watchdog_enable(8000, 1);
+
+    // 1b. Configure MPU for W^X memory protection
+    //     Must be before USB init — protects against code injection via buffer overflows
+    mpu_setup();
 
     // 2. Init subsystems
     msc_host_init();
